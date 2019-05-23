@@ -1,0 +1,10 @@
+LIBCJSON_1 {
+global:
+        c_json_init;
+        c_json_deinit;
+
+        c_json_begin_read;
+        c_json_end_read;
+local:
+       *;
+};
