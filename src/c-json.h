@@ -47,6 +47,7 @@ void c_json_deinit(CJson *json);
 void c_json_begin_read(CJson *json, const char *string);
 int c_json_end_read(CJson *json);
 int c_json_peek(CJson *json);
+int c_json_read_null(CJson *json);
 int c_json_read_string(CJson *json, char **stringp);
 int c_json_read_u64(CJson *json, uint64_t *numberp);
 int c_json_read_f64(CJson *json, double *numberp);

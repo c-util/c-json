@@ -184,6 +184,18 @@ _c_public_ int c_json_end_read(CJson *json) {
         return r;
 }
 
+_c_public_ int c_json_read_null(CJson *json) {
+        if (_c_unlikely_(json->poison))
+                return json->poison;
+
+        if (!strncmp(json->p, "null", strlen("null"))) {
+                json->p += strlen("null");
+        } else
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
+        return c_json_advance(json);
+}
+
 _c_public_ int c_json_read_string(CJson *json, char **stringp) {
         _c_cleanup_(c_fclosep) FILE *stream = NULL;
         _c_cleanup_(c_freep) char *string = NULL;

@@ -45,6 +45,12 @@ static void test_basic(void) {
         assert(b == true);
         assert(!c_json_end_read(&json));
         c_json_deinit(&json);
+
+        c_json_init(&json);
+        c_json_begin_read(&json, "null");
+        assert(!c_json_read_null(&json));
+        assert(!c_json_end_read(&json));
+        c_json_deinit(&json);
 }
 
 static void test_array(void) {
