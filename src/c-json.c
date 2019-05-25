@@ -55,6 +55,8 @@ static int c_json_advance(CJson *json) {
                         if (*json->p == ',') {
                                 json->states[json->level] = '{';
                                 json->p = skip_space(json->p + 1);
+                                if (*json->p != '"')
+                                        return (json->poison = C_JSON_E_INVALID_JSON);
                         } else if (*json->p != '}')
                                 return (json->poison = C_JSON_E_INVALID_JSON);
                         break;
@@ -122,6 +124,9 @@ _c_public_ CJson * c_json_free(CJson *json) {
 }
 
 _c_public_ int c_json_peek(CJson *json) {
+        if (_c_unlikely_(json->poison))
+                return -1;
+
         switch (*json->p) {
                 case '[':
                 case ']':
@@ -439,6 +444,9 @@ _c_public_ int c_json_open_object(CJson *json) {
                 return C_JSON_E_DEPTH_OVERFLOW;
 
         json->p = skip_space(json->p + 1);
+        if (*json->p != '"' && *json->p != '}')
+                return (json->poison = C_JSON_E_INVALID_JSON);
+
         json->states[++json->level] = '{';
 
         return 0;
