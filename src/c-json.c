@@ -7,44 +7,16 @@
 #include <stdlib.h>
 #include "c-json.h"
 
-struct CJsonLevel {
-        CJsonLevel *parent;
-        char state; /* [, {, or : */
-};
-
 struct CJson {
         const char *input;
 
         const char *p;
-        CJsonLevel *level;
 
         int poison;
+
+        size_t level;
+        char states[];
 };
-
-static int c_json_push_level(CJson *json, char state) {
-        CJsonLevel *level;
-
-        level = calloc(1, sizeof(CJsonLevel));
-        if (!level)
-                return -ENOTRECOVERABLE;
-
-        level->parent = json->level;
-        level->state = state;
-
-        json->level = level;
-
-        return 0;
-}
-
-static void c_json_pop_level(CJson *json) {
-        CJsonLevel *parent;
-
-        assert(json->level);
-
-        parent = json->level->parent;
-        free(json->level);
-        json->level = parent;
-}
 
 static const char * skip_space(const char *p) {
         while (isspace(*p))
@@ -62,32 +34,30 @@ static int c_json_advance(CJson *json) {
 
         json->p = skip_space(json->p);
 
-        if (json->level) {
-                switch (json->level->state) {
-                        case '[':
-                                if (*json->p == ',')
-                                        json->p = skip_space(json->p + 1);
-                                else if (*json->p != ']')
-                                        return (json->poison = C_JSON_E_INVALID_JSON);
-                                break;
+        switch (json->states[json->level]) {
+                case '[':
+                        if (*json->p == ',')
+                                json->p = skip_space(json->p + 1);
+                        else if (*json->p != ']')
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        break;
 
-                        case '{':
-                                if (*json->p == ':') {
-                                        json->level->state = ':';
-                                        json->p = skip_space(json->p + 1);
-                                }
-                                else
-                                        return (json->poison = C_JSON_E_INVALID_JSON);
-                                break;
+                case '{':
+                        if (*json->p == ':') {
+                                json->states[json->level] = ':';
+                                json->p = skip_space(json->p + 1);
+                        }
+                        else
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        break;
 
-                        case ':':
-                                if (*json->p == ',') {
-                                        json->level->state = '{';
-                                        json->p = skip_space(json->p + 1);
-                                } else if (*json->p != '}')
-                                        return (json->poison = C_JSON_E_INVALID_JSON);
-                                break;
-                }
+                case ':':
+                        if (*json->p == ',') {
+                                json->states[json->level] = '{';
+                                json->p = skip_space(json->p + 1);
+                        } else if (*json->p != '}')
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        break;
         }
 
         return 0;
@@ -135,7 +105,7 @@ static int c_json_read_unicode_char(const char *p, FILE *stream) {
 _c_public_ int c_json_new(CJson **jsonp) {
         _c_cleanup_(c_json_freep) CJson *json = NULL;
 
-        json = calloc(1, sizeof(*json));
+        json = calloc(1, sizeof(*json) + C_JSON_DEPTH_MAX);
         if (!json)
                 return -ENOMEM;
 
@@ -146,9 +116,6 @@ _c_public_ int c_json_new(CJson **jsonp) {
 }
 
 _c_public_ CJson * c_json_free(CJson *json) {
-        while (json->level)
-                c_json_pop_level(json);
-
         free(json);
 
         return NULL;
@@ -193,13 +160,10 @@ _c_public_ void c_json_begin_read(CJson *json, const char *string) {
 _c_public_ int c_json_end_read(CJson *json) {
         int r = json->poison;
 
-        if (json->level)
+        if (json->level > 0)
                 r = C_JSON_E_INVALID_TYPE;
 
-        while (json->level)
-                c_json_pop_level(json);
-
-        json->level = NULL;
+        json->level = 0;
         json->p = 0;
 
         return r;
@@ -402,16 +366,17 @@ _c_public_ bool c_json_more(CJson *json) {
         if (!*json->p)
                 return false;
 
-        if (json->level) {
-                if (json->level->state == '[')
+        switch (json->states[json->level]) {
+                case '[':
                         return *json->p != ']';
 
-                if (json->level->state == '{')
+                case '{':
                         return *json->p != '}';
         }
 
         return true;
 }
+
 
 _c_public_ int c_json_open_array(CJson *json) {
         if (_c_unlikely_(json->poison))
@@ -420,8 +385,11 @@ _c_public_ int c_json_open_array(CJson *json) {
         if (*json->p != '[')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
+        if (json->level >= C_JSON_DEPTH_MAX)
+                return C_JSON_E_DEPTH_OVERFLOW;
+
         json->p = skip_space(json->p + 1);
-        c_json_push_level(json, '[');
+        json->states[++json->level] = '[';
 
         return 0;
 }
@@ -430,11 +398,14 @@ _c_public_ int c_json_close_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
+        if (json->states[json->level] != '[')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
         if (*json->p != ']')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         json->p += 1;
-        c_json_pop_level(json);
+        json->level -= 1;
 
         return c_json_advance(json);
 }
@@ -446,8 +417,11 @@ _c_public_ int c_json_open_object(CJson *json) {
         if (*json->p != '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
+        if (json->level >= C_JSON_DEPTH_MAX)
+                return C_JSON_E_DEPTH_OVERFLOW;
+
         json->p = skip_space(json->p + 1);
-        c_json_push_level(json, '{');
+        json->states[++json->level] = '{';
 
         return 0;
 }
@@ -456,11 +430,14 @@ _c_public_ int c_json_close_object(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
+        if (json->states[json->level] != '{' && json->states[json->level] != ':')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
         if (*json->p != '}')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         json->p += 1;
-        c_json_pop_level(json);
+        json->level -= 1;
 
         return c_json_advance(json);
 }

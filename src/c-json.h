@@ -7,6 +7,8 @@ extern "C" {
 #include <stdarg.h>
 #include <stdbool.h>
 
+#define C_JSON_DEPTH_MAX 256
+
 typedef struct CJson CJson;
 typedef struct CJsonLevel CJsonLevel;
 
@@ -14,6 +16,7 @@ enum  {
         _C_JSON_E_SUCCESS,
         C_JSON_E_INVALID_JSON,
         C_JSON_E_INVALID_TYPE,
+        C_JSON_E_DEPTH_OVERFLOW,
 };
 
 enum {
