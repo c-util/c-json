@@ -129,12 +129,16 @@ _c_public_ int c_json_peek(CJson *json) {
 
         switch (*json->p) {
                 case '[':
-                case ']':
                         return C_JSON_TYPE_ARRAY;
 
+                case ']':
+                        return C_JSON_TYPE_ARRAY_END;
+
                 case '{':
-                case '}':
                         return C_JSON_TYPE_OBJECT;
+
+                case '}':
+                        return C_JSON_TYPE_OBJECT_END;
 
                 case '"':
                         return C_JSON_TYPE_STRING;

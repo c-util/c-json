@@ -62,16 +62,5 @@ endif
 test_basic = executable('test-basic', ['test-basic.c'], dependencies: libcjson_dep)
 test('Basic API Behavior', test_basic)
 
-# test_basic = executable('test-basic', ['test-basic.c'], dependencies: libcjson_dep)
-# test('Basic API Behavior', test_basic)
-# 
-# if dep_typenum.found()
-#         test_enumerated = executable('test-enumerated', ['test-enumerated.c'], dependencies: [ libcjson_dep, dep_typenum ])
-#         test('Type and Data Verification with Enumerated Types', test_enumerated)
-# endif
-# 
-# test_string = executable('test-string', ['test-string.c'], dependencies: libcjson_dep)
-# test('D-Bus String Restrictions', test_string)
-# 
-# test_type = executable('test-type', ['test-type.c'], dependencies: libcjson_dep)
-# test('Type and Signature Parser', test_type)
+test_reader = executable('test-reader', ['test-reader.c'], dependencies: libcjson_dep)
+test('Reader for JSONTestSuite tests', test_reader)
