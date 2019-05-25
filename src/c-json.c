@@ -317,12 +317,12 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
-        if (!strncmp(json->p, "true", sizeof("true"))) {
+        if (!strncmp(json->p, "true", strlen("true"))) {
                 b = true;
-                json->p += sizeof("true");
-        } else if (!strncmp(json->p, "false", sizeof("false"))) {
+                json->p += strlen("true");
+        } else if (!strncmp(json->p, "false", strlen("false"))) {
                 b = false;
-                json->p += sizeof("false");
+                json->p += strlen("false");
         } else
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
