@@ -25,24 +25,8 @@ enum {
         C_JSON_TYPE_OBJECT
 };
 
-struct CJsonLevel {
-        CJsonLevel *parent;
-        char state; /* [, {, or : */
-};
-
-struct CJson {
-        const char *input;
-
-        const char *p;
-        CJsonLevel *level;
-
-        int poison;
-};
-
-#define C_JSON_INIT { 0 }
-
-void c_json_init(CJson *json);
-void c_json_deinit(CJson *json);
+int c_json_new(CJson **jsonp);
+CJson * c_json_free(CJson *json);
 
 void c_json_begin_read(CJson *json, const char *string);
 int c_json_end_read(CJson *json);
@@ -57,6 +41,11 @@ int c_json_open_array(CJson *json);
 int c_json_close_array(CJson *json);
 int c_json_open_object(CJson *json);
 int c_json_close_object(CJson *json);
+
+static inline void c_json_freep(CJson **jsonp) {
+        if (*jsonp)
+                c_json_free(*jsonp);
+}
 
 #ifdef __cplusplus
 }

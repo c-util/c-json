@@ -7,13 +7,19 @@
 #include <stdlib.h>
 #include "c-json.h"
 
-/*
- * TODO
- *
- *   - can read non-strings as object keys (treat as programmer error?)
- *   - should end_read() fail when there's still levels?
- *
- */
+struct CJsonLevel {
+        CJsonLevel *parent;
+        char state; /* [, {, or : */
+};
+
+struct CJson {
+        const char *input;
+
+        const char *p;
+        CJsonLevel *level;
+
+        int poison;
+};
 
 static int c_json_push_level(CJson *json, char state) {
         CJsonLevel *level;
@@ -126,15 +132,26 @@ static int c_json_read_unicode_char(const char *p, FILE *stream) {
         return 0;
 }
 
-_c_public_ void c_json_init(CJson *json) {
-        *json = (CJson)C_JSON_INIT;
+_c_public_ int c_json_new(CJson **jsonp) {
+        _c_cleanup_(c_json_freep) CJson *json = NULL;
+
+        json = calloc(1, sizeof(*json));
+        if (!json)
+                return -ENOMEM;
+
+        *jsonp = json;
+        json = NULL;
+
+        return 0;
 }
 
-_c_public_ void c_json_deinit(CJson *json) {
+_c_public_ CJson * c_json_free(CJson *json) {
         while (json->level)
                 c_json_pop_level(json);
 
-        *json = (CJson)C_JSON_INIT;
+        free(json);
+
+        return NULL;
 }
 
 _c_public_ int c_json_peek(CJson *json) {
@@ -167,7 +184,7 @@ _c_public_ int c_json_peek(CJson *json) {
 }
 
 _c_public_ void c_json_begin_read(CJson *json, const char *string) {
-        c_json_deinit(json);
+        assert(!json->input);
 
         json->input = string;
         json->p = skip_space(json->input);
@@ -179,7 +196,11 @@ _c_public_ int c_json_end_read(CJson *json) {
         if (json->level)
                 r = C_JSON_E_INVALID_TYPE;
 
-        c_json_deinit(json);
+        while (json->level)
+                c_json_pop_level(json);
+
+        json->level = NULL;
+        json->p = 0;
 
         return r;
 }
