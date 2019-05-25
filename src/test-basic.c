@@ -105,9 +105,39 @@ static void test_object(void) {
         c_json_deinit(&json);
 }
 
+static void test_peek(void) {
+        static CJson json;
+
+        c_json_init(&json);
+        c_json_begin_read(&json, "{ \"foo\": \"bar\", \"bar\": 42, \"baz\": true }");
+
+        assert(c_json_peek(&json) == C_JSON_TYPE_OBJECT);
+        assert(!c_json_open_object(&json));
+
+        assert(c_json_peek(&json) == C_JSON_TYPE_STRING);
+        assert(!c_json_read_string(&json, NULL));
+        assert(c_json_peek(&json) == C_JSON_TYPE_STRING);
+        assert(!c_json_read_string(&json, NULL));
+
+        assert(c_json_peek(&json) == C_JSON_TYPE_STRING);
+        assert(!c_json_read_string(&json, NULL));
+        assert(c_json_peek(&json) == C_JSON_TYPE_NUMBER);
+        assert(!c_json_read_u64(&json, NULL));
+
+        assert(c_json_peek(&json) == C_JSON_TYPE_STRING);
+        assert(!c_json_read_string(&json, NULL));
+        assert(c_json_peek(&json) == C_JSON_TYPE_BOOLEAN);
+        assert(!c_json_read_bool(&json, NULL));
+
+        assert(c_json_peek(&json) == C_JSON_TYPE_OBJECT);
+        assert(!c_json_close_object(&json));
+        c_json_deinit(&json);
+}
+
 int main(int argc, char **argv) {
         test_basic();
         test_array();
         test_object();
+        test_peek();
         return 0;
 }

@@ -137,6 +137,35 @@ _c_public_ void c_json_deinit(CJson *json) {
         *json = (CJson)C_JSON_INIT;
 }
 
+_c_public_ int c_json_peek(CJson *json) {
+        switch (*json->p) {
+                case '[':
+                case ']':
+                        return C_JSON_TYPE_ARRAY;
+
+                case '{':
+                case '}':
+                        return C_JSON_TYPE_OBJECT;
+
+                case '"':
+                        return C_JSON_TYPE_STRING;
+
+                case '0' ... '9':
+                case '-':
+                        return C_JSON_TYPE_NUMBER;
+
+                case 't':
+                case 'f':
+                        return C_JSON_TYPE_BOOLEAN;
+
+                case 'n':
+                        return C_JSON_TYPE_NULL;
+
+                default:
+                        return -1;
+        }
+}
+
 _c_public_ void c_json_begin_read(CJson *json, const char *string) {
         c_json_deinit(json);
 
