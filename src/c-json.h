@@ -19,7 +19,6 @@ enum  {
 struct CJsonLevel {
         CJsonLevel *parent;
         char state; /* [, {, or : */
-        bool first;
 };
 
 struct CJson {

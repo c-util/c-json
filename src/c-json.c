@@ -24,7 +24,6 @@ static int c_json_push_level(CJson *json, char state) {
 
         level->parent = json->level;
         level->state = state;
-        level->first = true;
 
         json->level = level;
 
@@ -48,6 +47,9 @@ static const char * skip_space(const char *p) {
         return p;
 }
 
+/*
+ * Advances json->p to the start of the next value.
+ */
 static int c_json_advance(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -55,11 +57,6 @@ static int c_json_advance(CJson *json) {
         json->p = skip_space(json->p);
 
         if (json->level) {
-                if (json->level->first) {
-                        json->level->first = false;
-                        return 0;
-                }
-
                 switch (json->level->state) {
                         case '[':
                                 if (*json->p == ',')
@@ -143,7 +140,8 @@ _c_public_ void c_json_deinit(CJson *json) {
 _c_public_ void c_json_begin_read(CJson *json, const char *string) {
         c_json_deinit(json);
 
-        json->input = json->p = string;
+        json->input = string;
+        json->p = skip_space(json->input);
 }
 
 _c_public_ int c_json_end_read(CJson *json) {
@@ -163,9 +161,8 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
         size_t size;
         int r;
 
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         if (*json->p != '"')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
@@ -246,6 +243,10 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
 
         stream = c_fclose(stream);
 
+        r = c_json_advance(json);
+        if (r)
+                return r;
+
         if (stringp) {
                 *stringp = string;
                 string = NULL;
@@ -259,9 +260,8 @@ _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
         uint64_t number;
         int r;
 
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         /* strtoul() silently flips sign if first char is a minus */
         if (*json->p == '-')
@@ -273,6 +273,10 @@ _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         json->p = end;
+
+        r = c_json_advance(json);
+        if (r)
+                return r;
 
         if (numberp)
                 *numberp = number;
@@ -286,9 +290,8 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         locale_t loc;
         int r;
 
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         loc = newlocale(LC_NUMERIC_MASK, "C", (locale_t) 0);
         uselocale(loc);
@@ -296,6 +299,10 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         freelocale(loc);
 
         json->p = end;
+
+        r = c_json_advance(json);
+        if (r)
+                return r;
 
         if (numberp)
                 *numberp = number;
@@ -307,9 +314,8 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         bool b;
         int r;
 
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         if (!strncmp(json->p, "true", sizeof("true"))) {
                 b = true;
@@ -320,6 +326,10 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         } else
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
+        r = c_json_advance(json);
+        if (r)
+                return r;
+
         if (boolp)
                 *boolp = b;
 
@@ -327,8 +337,6 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
 }
 
 _c_public_ bool c_json_more(CJson *json) {
-        json->p = skip_space(json->p);
-
         if (!*json->p)
                 return false;
 
@@ -344,27 +352,21 @@ _c_public_ bool c_json_more(CJson *json) {
 }
 
 _c_public_ int c_json_open_array(CJson *json) {
-        int r;
-
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         if (*json->p != '[')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        json->p += 1;
+        json->p = skip_space(json->p + 1);
         c_json_push_level(json, '[');
 
         return 0;
 }
 
 _c_public_ int c_json_close_array(CJson *json) {
-        int r;
-
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         if (*json->p != ']')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
@@ -372,31 +374,25 @@ _c_public_ int c_json_close_array(CJson *json) {
         json->p += 1;
         c_json_pop_level(json);
 
-        return 0;
+        return c_json_advance(json);
 }
 
 _c_public_ int c_json_open_object(CJson *json) {
-        int r;
-
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         if (*json->p != '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        json->p += 1;
+        json->p = skip_space(json->p + 1);
         c_json_push_level(json, '{');
 
         return 0;
 }
 
 _c_public_ int c_json_close_object(CJson *json) {
-        int r;
-
-        r = c_json_advance(json);
-        if (r)
-                return r;
+        if (_c_unlikely_(json->poison))
+                return json->poison;
 
         if (*json->p != '}')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
@@ -404,5 +400,5 @@ _c_public_ int c_json_close_object(CJson *json) {
         json->p += 1;
         c_json_pop_level(json);
 
-        return 0;
+        return c_json_advance(json);
 }
