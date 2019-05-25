@@ -173,6 +173,9 @@ _c_public_ int c_json_read_null(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
+        if (json->states[json->level] == '{')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
         if (!strncmp(json->p, "null", strlen("null"))) {
                 json->p += strlen("null");
         } else
@@ -289,6 +292,9 @@ _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
+        if (json->states[json->level] == '{')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
         /* strtoul() silently flips sign if first char is a minus */
         if (*json->p == '-')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
@@ -319,6 +325,9 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
+        if (json->states[json->level] == '{')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
         loc = newlocale(LC_NUMERIC_MASK, "C", (locale_t) 0);
         uselocale(loc);
         number = strtod(json->p, &end);
@@ -339,6 +348,9 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
 _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         bool b;
         int r;
+
+        if (json->states[json->level] == '{')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -382,6 +394,9 @@ _c_public_ int c_json_open_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
+        if (json->states[json->level] == '{')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
+
         if (*json->p != '[')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
@@ -413,6 +428,9 @@ _c_public_ int c_json_close_array(CJson *json) {
 _c_public_ int c_json_open_object(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
+
+        if (json->states[json->level] == '{')
+                return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (*json->p != '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
