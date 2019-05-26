@@ -56,11 +56,19 @@ if not meson.is_subproject()
 endif
 
 #
+# target: json-validate
+#
+#
+json_validate = executable('json-validate', ['json-validate.c'], dependencies: libcjson_dep)
+
+#
 # target: test-*
 #
 
 test_basic = executable('test-basic', ['test-basic.c'], dependencies: libcjson_dep)
-test('Basic API Behavior', test_basic)
+test('test-basic', test_basic)
 
-test_reader = executable('test-reader', ['test-reader.c'], dependencies: libcjson_dep)
-test('Reader for JSONTestSuite tests', test_reader)
+test('test-reader',
+        find_program('test-reader'),
+        args: [ json_validate, meson.source_root() + '/test']
+)

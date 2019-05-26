@@ -1,0 +1,32 @@
+#!/bin/python3
+
+import glob
+import os
+import subprocess
+import sys
+
+# from c-util.h
+C_JSON_E_INVALID_JSON = 1
+C_JSON_E_INVALID_TYPE = 2
+C_JSON_E_DEPTH_OVERFLOW = 3
+
+json_validate = sys.argv[1]
+tests_dir = sys.argv[2]
+
+for path in glob.glob(f"{tests_dir}/*.json"):
+    print(path, end=' ... ')
+    expected = os.path.basename(path)[0]
+
+    r = subprocess.run([json_validate, path], capture_output=True)
+    if expected == 'n':
+        success = r.returncode in [ C_JSON_E_INVALID_JSON, C_JSON_E_DEPTH_OVERFLOW ]
+    elif expected == 'i':
+        success = True
+    else:
+        success = r.returncode == 0
+
+    if success:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
