@@ -131,14 +131,8 @@ _c_public_ int c_json_peek(CJson *json) {
                 case '[':
                         return C_JSON_TYPE_ARRAY;
 
-                case ']':
-                        return C_JSON_TYPE_ARRAY_END;
-
                 case '{':
                         return C_JSON_TYPE_OBJECT;
-
-                case '}':
-                        return C_JSON_TYPE_OBJECT_END;
 
                 case '"':
                         return C_JSON_TYPE_STRING;
@@ -155,6 +149,8 @@ _c_public_ int c_json_peek(CJson *json) {
                         return C_JSON_TYPE_NULL;
 
                 default:
+                case ']':
+                case '}':
                         return -1;
         }
 }

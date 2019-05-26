@@ -25,9 +25,7 @@ enum {
         C_JSON_TYPE_STRING,
         C_JSON_TYPE_NUMBER,
         C_JSON_TYPE_ARRAY,
-        C_JSON_TYPE_ARRAY_END,
         C_JSON_TYPE_OBJECT,
-        C_JSON_TYPE_OBJECT_END,
 };
 
 int c_json_new(CJson **jsonp);

@@ -5,7 +5,7 @@
 set -e
 
 for i in JSONTestSuite/test_parsing/*.json; do
-  printf "%s... " $i
+  printf "%s ... " $i
   if ! ./build/src/test-reader $i; then
     echo FAIL
     exit 1

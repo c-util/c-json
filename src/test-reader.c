@@ -4,6 +4,39 @@
 #include <stdio.h>
 #include "c-json.h"
 
+int json_read_value(CJson *json) {
+        int r = 0;
+
+        switch (c_json_peek(json)) {
+                case C_JSON_TYPE_NULL:
+                        return c_json_read_null(json);
+
+                case C_JSON_TYPE_BOOLEAN:
+                        return c_json_read_bool(json, NULL);
+
+                case C_JSON_TYPE_STRING:
+                        return c_json_read_string(json, NULL);
+
+                case C_JSON_TYPE_NUMBER:
+                        return c_json_read_f64(json, NULL);
+
+                case C_JSON_TYPE_ARRAY:
+                        c_json_open_array(json);
+                        while (!r && c_json_more(json))
+                                r = json_read_value(json);
+                        return c_json_close_array(json);
+
+                case C_JSON_TYPE_OBJECT:
+                        c_json_open_object(json);
+                        while (!r && c_json_more(json))
+                                r = json_read_value(json);
+                        return c_json_close_object(json);
+
+                default:
+                        return C_JSON_E_INVALID_JSON;
+        }
+}
+
 int main(int argc, char **argv) {
         _c_cleanup_ (c_json_freep) CJson *json = NULL;
         _c_cleanup_ (c_fclosep) FILE *file = NULL;
@@ -52,54 +85,21 @@ int main(int argc, char **argv) {
 
         c_json_new(&json);
         c_json_begin_read(json, input);
-
-        r = 0;
-        while (!r && c_json_more(json)) {
-                switch (c_json_peek(json)) {
-                        case C_JSON_TYPE_NULL:
-                                r = c_json_read_null(json);
-                                break;
-
-                        case C_JSON_TYPE_BOOLEAN:
-                                r = c_json_read_bool(json, NULL);
-                                break;
-
-                        case C_JSON_TYPE_STRING:
-                                r = c_json_read_string(json, NULL);
-                                break;
-
-                        case C_JSON_TYPE_NUMBER:
-                                r = c_json_read_f64(json, NULL);
-                                break;
-
-                        case C_JSON_TYPE_ARRAY:
-                                r = c_json_open_array(json);
-                                break;
-
-                        case C_JSON_TYPE_ARRAY_END:
-                                r = c_json_close_array(json);
-                                break;
-
-                        case C_JSON_TYPE_OBJECT:
-                                r = c_json_open_object(json);
-                                break;
-
-                        case C_JSON_TYPE_OBJECT_END:
-                                r = c_json_close_object(json);
-                                break;
-
-                        default:
-                                r = C_JSON_E_INVALID_JSON;
-                                break;
-                }
-        }
-
+        json_read_value(json);
         r = c_json_end_read(json);
         if (r) {
-                /* JSONTestSuite's test cases start with 'y' (valid) or 'n' (invalid) */
-                if (r == C_JSON_E_INVALID_JSON)
-                        return argv[0][1] == 'n';
-                return 1;
+                /* JSONTestSuite's test cases start with 'y' (valid), 'n' (invalid), or i (either) */
+                switch (r) {
+                        case C_JSON_E_INVALID_JSON:
+                        case C_JSON_E_DEPTH_OVERFLOW: {
+                                char *filename = basename(argv[1]);
+                                if (filename[0] == 'n' || filename[0] == 'i')
+                                        return 0;
+                        }
+
+                        default:
+                                return 1;
+                }
         }
 
         return 0;
