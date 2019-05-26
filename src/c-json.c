@@ -407,6 +407,7 @@ _c_public_ bool c_json_more(CJson *json) {
                         return *json->p != ']';
 
                 case '{':
+                case ':':
                         return *json->p != '}';
         }
 
