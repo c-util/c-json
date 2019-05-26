@@ -239,6 +239,9 @@ _c_public_ void c_json_begin_read(CJson *json, const char *string) {
  * c_json_end_read() - end reading
  * @json                json object
  *
+ * Ends reading. If there was a previous error, it is returned. The
+ * previous error is reset, so that the object can be reused.
+ *
  * Return: <0 on fatal error
  *         0 on success
  *         the last error that occured in a reader function
@@ -259,6 +262,7 @@ _c_public_ int c_json_end_read(CJson *json) {
         json->level = 0;
         json->input = NULL;
         json->p = NULL;
+        json->poison = 0;
 
         return r;
 }
