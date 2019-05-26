@@ -10,10 +10,30 @@
 struct CJson {
         const char *input;
 
+        /*
+         * Current position in the input. Always points to the start of
+         * the next value.
+         */
         const char *p;
 
+        /*
+         * Last error code. If it is non-zero, every function turns into
+         * a no-op and returns this value.
+         */
         int poison;
 
+        /*
+         * State for each nesting level. @n_states is the maximum
+         * nesting depth. For each level, the state can be:
+         *
+         *  0: root level
+         *
+         *  '[': in an array and @p points to the next value or ']'
+         *  ',': in an array and @p is behind a ','
+         *
+         *  '{': in an object and @p points to the next key
+         *  ':': in an object and @p points to the next value
+         */
         size_t n_states;
         size_t level;
         char states[];
@@ -27,7 +47,8 @@ static const char * skip_space(const char *p) {
 }
 
 /*
- * Advances json->p to the start of the next value.
+ * Advances json->p to the start of the next value. Must be called
+ * excactly once after a value has been read.
  */
 static int c_json_advance(CJson *json) {
         if (_c_unlikely_(json->poison))
@@ -76,6 +97,13 @@ static int c_json_advance(CJson *json) {
         return 0;
 }
 
+/*
+ * Read a single utf-16 unicode char and writes it to @stream. Does not
+ * do any unicode validation, as per the spec.
+ *
+ * Return: 0 on success
+ *         C_JSON_E_INVALID_JSON if @p does not point to a valid sequence
+ */
 static int c_json_read_unicode_char(const char *p, FILE *stream) {
         uint8_t digits[4];
         uint16_t cp;
@@ -115,6 +143,14 @@ static int c_json_read_unicode_char(const char *p, FILE *stream) {
         return 0;
 }
 
+/**
+ * c_json_new() - allocate and initialize a CJSon struct
+ * @jsonp:              return location
+ * @max_depth:          maximum nesting depth
+ *
+ * Return: <0 on fatal failures
+ *         0 on success
+ */
 _c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
         _c_cleanup_(c_json_freep) CJson *json = NULL;
 
@@ -130,12 +166,28 @@ _c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
         return 0;
 }
 
+/**
+ * c_json_free() - deinitialize and free a CJSon struct
+ * @json:               json to free
+ *
+ * Return: NULL
+ */
 _c_public_ CJson * c_json_free(CJson *json) {
         free(json);
 
         return NULL;
 }
 
+/**
+ * c_json_peek - peek at the next value
+ * @json                json object
+ *
+ * Peeks at the next value in the input stream. Does not validate that
+ * the next value is valid.
+ *
+ * Return: -1 if the next token is invalid or when exiting a container
+ *         one of the C_JSON_TYPE_ values
+ */
 _c_public_ int c_json_peek(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return -1;
@@ -168,6 +220,14 @@ _c_public_ int c_json_peek(CJson *json) {
         }
 }
 
+/**
+ * c_json_begin_read() - begin readinh JSON from a string
+ * @json                json object
+ * @string              0-terminated string to read from
+ *
+ * It is an error to call this function multiple times without calling
+ * c_json_end_read().
+ */
 _c_public_ void c_json_begin_read(CJson *json, const char *string) {
         assert(!json->input);
 
@@ -175,6 +235,16 @@ _c_public_ void c_json_begin_read(CJson *json, const char *string) {
         json->p = skip_space(json->input);
 }
 
+/**
+ * c_json_end_read() - end reading
+ * @json                json object
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if called before the input was fully read
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_end_read(CJson *json) {
         int r = json->poison;
 
@@ -193,6 +263,16 @@ _c_public_ int c_json_end_read(CJson *json) {
         return r;
 }
 
+/**
+ * c_json_read_null() - read `null` value
+ * @json                json object
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not `null`
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_read_null(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -214,6 +294,19 @@ _c_public_ int c_json_read_null(CJson *json) {
         return c_json_advance(json);
 }
 
+/**
+ * c_json_read_string() - read a string
+ * @json                json object
+ * @srtringp            return location for the string
+ *
+ * The returned string must be freed.
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not a string
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_read_string(CJson *json, char **stringp) {
         _c_cleanup_(c_fclosep) FILE *stream = NULL;
         _c_cleanup_(c_freep) char *string = NULL;
@@ -313,6 +406,17 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
         return 0;
 }
 
+/**
+ * c_json_read_u64() - read a unsigned integer
+ * @json                json object
+ * @srtringp            return location for the integer
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not an unsigned integer
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
         char *end;
         uint64_t number;
@@ -345,6 +449,17 @@ _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
         return 0;
 }
 
+/**
+ * c_json_read_f64() - read a number
+ * @json                json object
+ * @srtringp            return location for the number
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not a number
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         char *end;
         double number;
@@ -374,6 +489,17 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         return 0;
 }
 
+/**
+ * c_json_read_bool() - read a boolean
+ * @json                json object
+ * @srtringp            return location for the boolean
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not a boolean
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         bool b;
         int r;
@@ -413,6 +539,13 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         return 0;
 }
 
+/**
+ * c_json_more() - is another value available
+ * @json                json object
+ *
+ * Return: true if another value is available in the current container
+ *         false if no value is available or an error occured in a call to a previous function
+ */
 _c_public_ bool c_json_more(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return false;
@@ -432,7 +565,17 @@ _c_public_ bool c_json_more(CJson *json) {
         return true;
 }
 
-
+/**
+ * c_json_open_array() - enter into an array
+ * @json                json object
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not an array
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ *         C_JSON_E_DEPTH_OVERFLOW if the nesting depth is too high
+ */
 _c_public_ int c_json_open_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -452,6 +595,16 @@ _c_public_ int c_json_open_array(CJson *json) {
         return 0;
 }
 
+/**
+ * c_json_close_array() - exit from an array
+ * @json                json object
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if not currently in an array
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_close_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -468,6 +621,17 @@ _c_public_ int c_json_close_array(CJson *json) {
         return c_json_advance(json);
 }
 
+/**
+ * c_json_open_object() - enter into an object
+ * @json                json object
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if then next value is not an array
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ *         C_JSON_E_DEPTH_OVERFLOW if the nesting depth is too high
+ */
 _c_public_ int c_json_open_object(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -490,6 +654,16 @@ _c_public_ int c_json_open_object(CJson *json) {
         return 0;
 }
 
+/**
+ * c_json_close_object() - exit from an object
+ * @json                json object
+ *
+ * Return: <0 on fatal error
+ *         0 on success
+ *         the last error that occured in a reader function
+ *         C_JSON_E_INVALID_TYPE if not currently in an object
+ *         C_JSON_E_INVALID_JSON if the JSON input is malformed
+ */
 _c_public_ int c_json_close_object(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
