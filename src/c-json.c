@@ -181,10 +181,16 @@ _c_public_ int c_json_read_null(CJson *json) {
         if (json->states[json->level] == '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        if (!strncmp(json->p, "null", strlen("null"))) {
-                json->p += strlen("null");
-        } else
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        switch (*json->p) {
+                case 'n':
+                        if (strncmp(json->p, "null", strlen("null")))
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        json->p += strlen("null");
+                        break;
+
+                default:
+                        return (json->poison = C_JSON_E_INVALID_TYPE);
+        }
 
         return c_json_advance(json);
 }
@@ -360,14 +366,24 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
-        if (!strncmp(json->p, "true", strlen("true"))) {
-                b = true;
-                json->p += strlen("true");
-        } else if (!strncmp(json->p, "false", strlen("false"))) {
-                b = false;
-                json->p += strlen("false");
-        } else
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        switch (*json->p) {
+                case 't':
+                        if (strncmp(json->p, "true", strlen("true")))
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        b = true;
+                        json->p += strlen("true");
+                        break;
+
+                case 'f':
+                        if (strncmp(json->p, "false", strlen("false")))
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        b = false;
+                        json->p += strlen("false");
+                        break;
+
+                default:
+                        return (json->poison = C_JSON_E_INVALID_TYPE);
+        }
 
         r = c_json_advance(json);
         if (r)
