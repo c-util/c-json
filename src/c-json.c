@@ -396,6 +396,9 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
 }
 
 _c_public_ bool c_json_more(CJson *json) {
+        if (_c_unlikely_(json->poison))
+                return false;
+
         if (!*json->p)
                 return false;
 
