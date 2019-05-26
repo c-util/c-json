@@ -107,7 +107,7 @@ static int c_json_read_unicode_char(const char *p, FILE *stream) {
 _c_public_ int c_json_new(CJson **jsonp) {
         _c_cleanup_(c_json_freep) CJson *json = NULL;
 
-        json = calloc(1, sizeof(*json) + C_JSON_DEPTH_MAX);
+        json = calloc(1, sizeof(*json) + C_JSON_DEPTH_MAX + 1);
         if (!json)
                 return -ENOMEM;
 
