@@ -222,10 +222,9 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
 
         json->p += 1;
         while (*json->p != '"') {
-                if (*json->p == '\0')
+                if ((uint8_t)*json->p < 0x20) {
                         return (json->poison = C_JSON_E_INVALID_JSON);
-
-                if (*json->p == '\\') {
+                } else if (*json->p == '\\') {
                         json->p += 1;
                         switch (*json->p) {
                                 case '"':
