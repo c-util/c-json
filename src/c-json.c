@@ -477,6 +477,9 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         number = strtod(json->p, &end);
         freelocale(loc);
 
+        if (end == json->p)
+                return (json->poison = C_JSON_E_INVALID_JSON);
+
         json->p = end;
 
         r = c_json_advance(json);

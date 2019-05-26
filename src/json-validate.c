@@ -86,11 +86,11 @@ int main(int argc, char **argv) {
                 file = fopen(argv[1], "r");
                 if (!file)
                         return -errno;
-        }
 
-        r = read_file(file, &input);
-        if (r)
-                return 1;
+                r = read_file(file, &input);
+                if (r)
+                        return 1;
+        }
 
         c_json_new(&json, 256);
         c_json_begin_read(json, input);
