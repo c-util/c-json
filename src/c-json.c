@@ -165,7 +165,7 @@ _c_public_ void c_json_begin_read(CJson *json, const char *string) {
 _c_public_ int c_json_end_read(CJson *json) {
         int r = json->poison;
 
-        if (json->level > 0)
+        if (!r && json->level > 0)
                 r = C_JSON_E_INVALID_TYPE;
 
         json->level = 0;
