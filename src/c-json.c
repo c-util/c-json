@@ -20,7 +20,7 @@ struct CJson {
 };
 
 static const char * skip_space(const char *p) {
-        while (isspace(*p))
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
                 p += 1;
 
         return p;
