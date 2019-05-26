@@ -14,6 +14,7 @@ struct CJson {
 
         int poison;
 
+        size_t n_states;
         size_t level;
         char states[];
 };
@@ -104,12 +105,14 @@ static int c_json_read_unicode_char(const char *p, FILE *stream) {
         return 0;
 }
 
-_c_public_ int c_json_new(CJson **jsonp) {
+_c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
         _c_cleanup_(c_json_freep) CJson *json = NULL;
 
-        json = calloc(1, sizeof(*json) + C_JSON_DEPTH_MAX + 1);
+        json = calloc(1, sizeof(*json) + max_depth + 1);
         if (!json)
                 return -ENOMEM;
+
+        json->n_states = max_depth;
 
         *jsonp = json;
         json = NULL;
@@ -425,7 +428,7 @@ _c_public_ int c_json_open_array(CJson *json) {
         if (*json->p != '[')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        if (json->level >= C_JSON_DEPTH_MAX)
+        if (json->level >= json->n_states)
                 return (json->poison = C_JSON_E_DEPTH_OVERFLOW);
 
         json->p = skip_space(json->p + 1);
@@ -460,7 +463,7 @@ _c_public_ int c_json_open_object(CJson *json) {
         if (*json->p != '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        if (json->level >= C_JSON_DEPTH_MAX)
+        if (json->level >= json->n_states)
                 return (json->poison = C_JSON_E_DEPTH_OVERFLOW);
 
         json->p = skip_space(json->p + 1);

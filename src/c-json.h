@@ -7,8 +7,6 @@ extern "C" {
 #include <stdarg.h>
 #include <stdbool.h>
 
-#define C_JSON_DEPTH_MAX 256
-
 typedef struct CJson CJson;
 typedef struct CJsonLevel CJsonLevel;
 
@@ -28,7 +26,7 @@ enum {
         C_JSON_TYPE_OBJECT,
 };
 
-int c_json_new(CJson **jsonp);
+int c_json_new(CJson **jsonp, size_t max_depth);
 CJson * c_json_free(CJson *json);
 
 void c_json_begin_read(CJson *json, const char *string);

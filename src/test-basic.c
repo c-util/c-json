@@ -12,41 +12,41 @@ static void test_basic(void) {
         double f64 = 0;
         bool b = false;
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "\"foo \\u00e4bc\"");
         assert(!c_json_read_string(json, &string));
         assert(string && !strcmp(string, "foo äbc"));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "12345678");
         assert(!c_json_read_u64(json, &u64));
         assert(u64 == 12345678);
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "-1");
         assert(c_json_read_u64(json, &u64) == C_JSON_E_INVALID_TYPE);
         assert(c_json_end_read(json) == C_JSON_E_INVALID_TYPE);
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "-3.14");
         assert(!c_json_read_f64(json, &f64));
         assert(f64 == -3.14);
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "true");
         assert(!c_json_read_bool(json, &b));
         assert(b == true);
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "null");
         assert(!c_json_read_null(json));
         assert(!c_json_end_read(json));
@@ -56,7 +56,7 @@ static void test_basic(void) {
 static void test_array(void) {
         static CJson *json = NULL;
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "[]");
         assert(!c_json_open_array(json));
         assert(!c_json_more(json));
@@ -64,7 +64,7 @@ static void test_array(void) {
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "[ 1, 2, 3, 4, 5, 6 ]");
         assert(!c_json_open_array(json));
         for (uint64_t i = 1; i < 7; i += 1) {
@@ -85,7 +85,7 @@ static void test_object(void) {
                 { "bar", 43 }
         };
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "{}");
         assert(!c_json_open_object(json));
         assert(!c_json_more(json));
@@ -93,7 +93,7 @@ static void test_object(void) {
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "{ \"foo\": 42, \"bar\": 43 }");
         assert(!c_json_open_object(json));
         for (uint64_t i = 0; i < 2; i += 1) {
@@ -114,7 +114,7 @@ static void test_object(void) {
 static void test_peek(void) {
         static CJson *json = NULL;
 
-        assert(!c_json_new(&json));
+        assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "{ \"foo\": \"bar\", \"bar\": 42, \"baz\": true }");
 
         assert(c_json_peek(json) == C_JSON_TYPE_OBJECT);
@@ -135,7 +135,7 @@ static void test_peek(void) {
         assert(c_json_peek(json) == C_JSON_TYPE_BOOLEAN);
         assert(!c_json_read_bool(json, NULL));
 
-        assert(c_json_peek(json) == C_JSON_TYPE_OBJECT);
+        assert(c_json_peek(json) == -1);
         assert(!c_json_close_object(json));
         json = c_json_free(json);
 }

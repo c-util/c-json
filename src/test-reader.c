@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
 
         stream = c_fclose(stream);
 
-        c_json_new(&json);
+        c_json_new(&json, 256);
         c_json_begin_read(json, input);
         json_read_value(json);
         r = c_json_end_read(json);
