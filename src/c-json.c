@@ -426,7 +426,7 @@ _c_public_ int c_json_open_array(CJson *json) {
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (json->level >= C_JSON_DEPTH_MAX)
-                return C_JSON_E_DEPTH_OVERFLOW;
+                return (json->poison = C_JSON_E_DEPTH_OVERFLOW);
 
         json->p = skip_space(json->p + 1);
         json->states[++json->level] = '[';
@@ -442,7 +442,7 @@ _c_public_ int c_json_close_array(CJson *json) {
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (*json->p != ']')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+                return (json->poison = C_JSON_E_INVALID_JSON);
 
         json->p += 1;
         json->level -= 1;
@@ -461,7 +461,7 @@ _c_public_ int c_json_open_object(CJson *json) {
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (json->level >= C_JSON_DEPTH_MAX)
-                return C_JSON_E_DEPTH_OVERFLOW;
+                return (json->poison = C_JSON_E_DEPTH_OVERFLOW);
 
         json->p = skip_space(json->p + 1);
         if (*json->p != '"' && *json->p != '}')
@@ -480,7 +480,7 @@ _c_public_ int c_json_close_object(CJson *json) {
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (*json->p != '}')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+                return (json->poison = C_JSON_E_INVALID_JSON);
 
         json->p += 1;
         json->level -= 1;
