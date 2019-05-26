@@ -37,9 +37,19 @@ static int c_json_advance(CJson *json) {
 
         switch (json->states[json->level]) {
                 case '[':
+                        if (*json->p == ',') {
+                                json->states[json->level] = ',';
+                                json->p = skip_space(json->p + 1);
+                        } else if (*json->p != ']')
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        break;
+
+                case ',':
                         if (*json->p == ',')
                                 json->p = skip_space(json->p + 1);
-                        else if (*json->p != ']')
+                        else if (*json->p == ']')
+                                json->states[json->level] = '[';
+                        else
                                 return (json->poison = C_JSON_E_INVALID_JSON);
                         break;
 
@@ -446,7 +456,7 @@ _c_public_ int c_json_close_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
-        if (json->states[json->level] != '[')
+        if (json->states[json->level] != '[' && json->states[json->level] != ',')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
         if (*json->p != ']')
