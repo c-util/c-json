@@ -98,15 +98,14 @@ static int c_json_advance(CJson *json) {
 }
 
 /*
- * Read a single utf-16 unicode char and writes it to @stream. Does not
+ * Reads a single utf-16 code unit and writes it to @unitp. Does not
  * do any unicode validation, as per the spec.
  *
  * Return: 0 on success
  *         C_JSON_E_INVALID_JSON if @p does not point to a valid sequence
  */
-static int c_json_read_unicode_char(const char *p, FILE *stream) {
+static int c_json_read_utf16_unit(const char *p, uint16_t *unitp) {
         uint8_t digits[4];
-        uint16_t cp;
 
         for (size_t i = 0; i < 4; i += 1) {
                 switch (p[i]) {
@@ -127,17 +126,43 @@ static int c_json_read_unicode_char(const char *p, FILE *stream) {
                 }
         }
 
-        cp = digits[0] << 12 | digits[1] << 8 | digits[2] << 4 | digits[3];
+        *unitp = digits[0] << 12 | digits[1] << 8 | digits[2] << 4 | digits[3];
 
-        if (cp <= 0x007f) {
-                fputc((char)cp, stream);
-        } else if (cp <= 0x07ff) {
-                fputc((char)(0xc0 | (cp >> 6)), stream);
-                fputc((char)(0x80 | (cp & 0x3f)), stream);
-        } else {
-                fputc((char)(0xe0 | (cp >> 12)), stream);
-                fputc((char)(0x80 | ((cp >> 6) & 0x3f)), stream);
-                fputc((char)(0x80 | (cp & 0x3f)), stream);
+        return 0;
+}
+
+static int c_json_write_utf8(uint32_t cp, FILE *stream) {
+        switch (cp) {
+        case  0x0000 ...   0x007F:
+                if (fputc((char)cp, stream) < 0)
+                        return -ENOTRECOVERABLE;
+                break;
+        case  0x0080 ...   0x07FF:
+                if (fputc((char)(0xc0 | (cp >> 6)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                if (fputc((char)(0x80 | (cp & 0x3f)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                break;
+        case  0x0800 ...   0xFFFF:
+                if (fputc((char)(0xe0 | (cp >> 12)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                if (fputc((char)(0x80 | ((cp >> 6) & 0x3f)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                if (fputc((char)(0x80 | (cp & 0x3f)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                break;
+        case 0x10000 ... 0x10FFFF:
+                if (fputc((char)(0xf0 | (cp >> 18)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                if (fputc((char)(0x80 | ((cp >> 12) & 0x3f)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                if (fputc((char)(0x80 | ((cp >> 6) & 0x3f)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                if (fputc((char)(0x80 | (cp & 0x3f)), stream) < 0)
+                        return -ENOTRECOVERABLE;
+                break;
+        default:
+                assert(0);
         }
 
         return 0;
@@ -329,58 +354,102 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
 
         json->p += 1;
         while (*json->p != '"') {
-                if ((uint8_t)*json->p < 0x20) {
+                if ((uint8_t)*json->p < 0x20)
                         return (json->poison = C_JSON_E_INVALID_JSON);
-                } else if (*json->p == '\\') {
+
+                if (*json->p == '\\') {
                         json->p += 1;
                         switch (*json->p) {
                                 case '"':
+                                        json->p += 1;
                                         if (fputc('"', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case '\\':
+                                        json->p += 1;
                                         if (fputc('\\', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case '/':
+                                        json->p += 1;
                                         if (fputc('/', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'b':
+                                        json->p += 1;
                                         if (fputc('\b', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'f':
+                                        json->p += 1;
                                         if (fputc('\f', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'n':
+                                        json->p += 1;
                                         if (fputc('\n', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'r':
+                                        json->p += 1;
                                         if (fputc('\r', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 't':
+                                        json->p += 1;
                                         if (fputc('\t', stream) < 0)
                                                 return (json->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'u': {
+                                        uint16_t cu;
+                                        uint32_t cp;
                                         int r;
 
-                                        r = c_json_read_unicode_char(json->p + 1, stream);
+                                        json->p += 1;
+
+                                        r = c_json_read_utf16_unit(json->p, &cu);
                                         if (r)
                                                 return (json->poison = r);
                                         json->p += 4;
+
+                                        switch (cu) {
+                                        case 0xD800 ... 0xDBFF:
+                                                cp = 0x10000 + ((cu - 0xD800) << 10);
+
+                                                if (json->p[0] != '\\' || json->p[1] != 'u')
+                                                        return (json->poison = C_JSON_E_INVALID_JSON);
+                                                json->p +=2;
+
+                                                r = c_json_read_utf16_unit(json->p, &cu);
+                                                if (r)
+                                                        return (json->poison = r);
+                                                json->p += 4;
+
+                                                if (cu < 0xDC00 || cu > 0xDFFF)
+                                                        return (json->poison = C_JSON_E_INVALID_JSON);
+
+                                                cp += cu - 0xDC00;
+
+                                                break;
+                                        case 0xDC00 ... 0xDFFF:
+                                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                        default:
+                                                cp = cu;
+                                                break;
+                                        }
+
+                                        r = c_json_write_utf8(cp, stream);
+                                        if (r)
+                                                return (json->poison = r);
+
                                         break;
                                 }
 
@@ -388,10 +457,11 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
                                         return (json->poison = C_JSON_E_INVALID_JSON);
                         }
 
-                } else if (fputc(*json->p, stream) < 0)
-                        return (json->poison = -ENOTRECOVERABLE);
-
-                json->p += 1;
+                } else {
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                }
         }
 
         json->p += 1; /* '"' */
