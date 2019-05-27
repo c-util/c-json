@@ -6,6 +6,7 @@ libcjson_symfile = join_paths(meson.current_source_dir(), 'libcjson.sym')
 
 libcjson_deps = [
         dep_cstdaux,
+        dep_cutf8,
 ]
 
 libcjson_private = static_library(

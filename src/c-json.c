@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <c-stdaux.h>
+#include <c-utf8.h>
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -354,10 +355,10 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
 
         json->p += 1;
         while (*json->p != '"') {
-                if ((uint8_t)*json->p < 0x20)
+                switch ((uint8_t)*json->p) {
+                case 0x00 ... 0x1F:
                         return (json->poison = C_JSON_E_INVALID_JSON);
-
-                if (*json->p == '\\') {
+                case '\\':
                         json->p += 1;
                         switch (*json->p) {
                                 case '"':
@@ -456,11 +457,81 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
                                 default:
                                         return (json->poison = C_JSON_E_INVALID_JSON);
                         }
-
-                } else {
+                        break;
+                case 0x20 ... '\\' - 1:
+                case '\\' + 1 ... 0x7F:
                         if (fputc(*json->p, stream) < 0)
                                 return (json->poison = -ENOTRECOVERABLE);
                         json->p += 1;
+                        break;
+                case 0xC2 ... 0xDF:
+                {
+                        const char *str = json->p;
+                        size_t n_str = 2;
+
+                        c_utf8_verify(&str, &n_str);
+
+                        if (n_str != 0)
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+
+                        break;
+                }
+                case 0xE0 ... 0xEF:
+                {
+                        const char *str = json->p;
+                        size_t n_str = 3;
+
+                        c_utf8_verify(&str, &n_str);
+
+                        if (n_str != 0)
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+
+                        break;
+                }
+                case 0xF0 ... 0xF4:
+                {
+                        const char *str = json->p;
+                        size_t n_str = 4;
+
+                        c_utf8_verify(&str, &n_str);
+
+                        if (n_str != 0)
+                                return (json->poison = C_JSON_E_INVALID_JSON);
+
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+                        if (fputc(*json->p, stream) < 0)
+                                return (json->poison = -ENOTRECOVERABLE);
+                        json->p += 1;
+
+                        break;
+                }
+                default:
+                        return (json->poison = C_JSON_E_INVALID_JSON);
                 }
         }
 
