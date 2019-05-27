@@ -412,7 +412,6 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
                                 case 'u': {
                                         uint16_t cu;
                                         uint32_t cp;
-                                        int r;
 
                                         json->p += 1;
 
