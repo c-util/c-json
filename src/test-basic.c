@@ -35,7 +35,7 @@ static void test_basic(void) {
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "-3.14");
         assert(!c_json_read_f64(json, &f64));
-        assert(f64 == -3.14);
+        assert(f64 > -3.15 && f64 < -3.13);
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
