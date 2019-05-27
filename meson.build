@@ -7,7 +7,7 @@ project(
                 'c_std=c11',
         ],
 )
-project_description = 'Json streaming parser'
+project_description = 'Streaming-capable JSON Implementation'
 
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
 mod_pkgconfig = import('pkgconfig')

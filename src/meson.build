@@ -59,7 +59,7 @@ endif
 #
 # target: json-validate
 #
-#
+
 json_validate = executable('json-validate', ['json-validate.c'], dependencies: libcjson_dep)
 
 #
@@ -69,7 +69,8 @@ json_validate = executable('json-validate', ['json-validate.c'], dependencies: l
 test_basic = executable('test-basic', ['test-basic.c'], dependencies: libcjson_dep)
 test('test-basic', test_basic)
 
-test('test-reader',
+test(
+        'test-reader',
         find_program('test-reader'),
-        args: [ json_validate, meson.source_root() + '/test']
+        args: [ json_validate, meson.source_root() + '/test'],
 )
