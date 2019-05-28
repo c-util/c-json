@@ -58,22 +58,22 @@ static void test_array(void) {
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "[]");
-        assert(!c_json_open_array(json));
+        assert(!c_json_enter_array(json));
         assert(!c_json_more(json));
-        assert(!c_json_close_array(json));
+        assert(!c_json_exit_array(json));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "[ 1, 2, 3, 4, 5, 6 ]");
-        assert(!c_json_open_array(json));
+        assert(!c_json_enter_array(json));
         for (uint64_t i = 1; i < 7; i += 1) {
                 uint64_t n;
                 assert(c_json_more(json));
                 assert(!c_json_read_u64(json, &n));
                         assert(n == i);
         }
-        assert(!c_json_close_array(json));
+        assert(!c_json_exit_array(json));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 }
@@ -87,15 +87,15 @@ static void test_object(void) {
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "{}");
-        assert(!c_json_open_object(json));
+        assert(!c_json_enter_object(json));
         assert(!c_json_more(json));
-        assert(!c_json_close_object(json));
+        assert(!c_json_exit_object(json));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "{ \"foo\": 42, \"bar\": 43 }");
-        assert(!c_json_open_object(json));
+        assert(!c_json_enter_object(json));
         for (uint64_t i = 0; i < 2; i += 1) {
                 _c_cleanup_(c_freep) char *key = NULL;
                 uint64_t n;
@@ -106,7 +106,7 @@ static void test_object(void) {
                 assert(!c_json_read_u64(json, &n));
                 assert(expected[i].value == n);
         }
-        assert(!c_json_close_object(json));
+        assert(!c_json_exit_object(json));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 }
@@ -118,7 +118,7 @@ static void test_peek(void) {
         c_json_begin_read(json, "{ \"foo\": \"bar\", \"bar\": 42, \"baz\": true }");
 
         assert(c_json_peek(json) == C_JSON_TYPE_OBJECT);
-        assert(!c_json_open_object(json));
+        assert(!c_json_enter_object(json));
 
         assert(c_json_peek(json) == C_JSON_TYPE_STRING);
         assert(!c_json_read_string(json, NULL));
@@ -136,7 +136,7 @@ static void test_peek(void) {
         assert(!c_json_read_bool(json, NULL));
 
         assert(c_json_peek(json) == -1);
-        assert(!c_json_close_object(json));
+        assert(!c_json_exit_object(json));
         json = c_json_free(json);
 }
 
