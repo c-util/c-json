@@ -746,8 +746,8 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
  */
 _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
         char *end;
-        uint64_t number;
-        int r;
+        unsigned long long number;
+        int r, err;
 
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -755,14 +755,18 @@ _c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
         if (json->states[json->level] == '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        /* strtoul() silently flips sign if first char is a minus */
+        /* strtoull() silently flips sign if first char is a minus */
         if (*json->p == '-')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        number = strtoul(json->p, &end, 10);
+        errno = 0;
+        number = strtoull(json->p, &end, 10);
+        err = errno;
 
         if (end == json->p || *end == '.' || *end == 'e' || *end == 'E')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
+        else if (err || number > UINT64_MAX)
+                return (json->poison = C_JSON_E_INVALID_JSON);
 
         json->p = end;
 
