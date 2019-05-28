@@ -731,7 +731,7 @@ _c_public_ bool c_json_more(CJson *json) {
 }
 
 /**
- * c_json_open_array() - enter into an array
+ * c_json_enter_array() - enter into an array
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -741,7 +741,7 @@ _c_public_ bool c_json_more(CJson *json) {
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  *         C_JSON_E_DEPTH_OVERFLOW if the nesting depth is too high
  */
-_c_public_ int c_json_open_array(CJson *json) {
+_c_public_ int c_json_enter_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
@@ -761,7 +761,7 @@ _c_public_ int c_json_open_array(CJson *json) {
 }
 
 /**
- * c_json_close_array() - exit from an array
+ * c_json_exit_array() - exit from an array
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -770,7 +770,7 @@ _c_public_ int c_json_open_array(CJson *json) {
  *         C_JSON_E_INVALID_TYPE if not currently in an array
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_close_array(CJson *json) {
+_c_public_ int c_json_exit_array(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
@@ -787,7 +787,7 @@ _c_public_ int c_json_close_array(CJson *json) {
 }
 
 /**
- * c_json_open_object() - enter into an object
+ * c_json_enter_object() - enter into an object
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -797,7 +797,7 @@ _c_public_ int c_json_close_array(CJson *json) {
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  *         C_JSON_E_DEPTH_OVERFLOW if the nesting depth is too high
  */
-_c_public_ int c_json_open_object(CJson *json) {
+_c_public_ int c_json_enter_object(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 
@@ -820,7 +820,7 @@ _c_public_ int c_json_open_object(CJson *json) {
 }
 
 /**
- * c_json_close_object() - exit from an object
+ * c_json_exit_object() - exit from an object
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -829,7 +829,7 @@ _c_public_ int c_json_open_object(CJson *json) {
  *         C_JSON_E_INVALID_TYPE if not currently in an object
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_close_object(CJson *json) {
+_c_public_ int c_json_exit_object(CJson *json) {
         if (_c_unlikely_(json->poison))
                 return json->poison;
 

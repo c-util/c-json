@@ -38,10 +38,10 @@ int c_json_read_u64(CJson *json, uint64_t *numberp);
 int c_json_read_f64(CJson *json, double *numberp);
 int c_json_read_bool(CJson *json, bool *boolp);
 bool c_json_more(CJson *json);
-int c_json_open_array(CJson *json);
-int c_json_close_array(CJson *json);
-int c_json_open_object(CJson *json);
-int c_json_close_object(CJson *json);
+int c_json_enter_array(CJson *json);
+int c_json_exit_array(CJson *json);
+int c_json_enter_object(CJson *json);
+int c_json_exit_object(CJson *json);
 
 static inline void c_json_freep(CJson **jsonp) {
         if (*jsonp)

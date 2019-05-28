@@ -50,22 +50,22 @@ int json_read_value(CJson *json) {
                         return c_json_read_f64(json, NULL);
 
                 case C_JSON_TYPE_ARRAY:
-                        c_json_open_array(json);
+                        c_json_enter_array(json);
                         while (c_json_more(json)) {
                                 int r = json_read_value(json);
                                 if (r)
                                         return r;
                         }
-                        return c_json_close_array(json);
+                        return c_json_exit_array(json);
 
                 case C_JSON_TYPE_OBJECT:
-                        c_json_open_object(json);
+                        c_json_enter_object(json);
                         while (c_json_more(json)) {
                                 int r = json_read_value(json);
                                 if (r)
                                         return r;
                         }
-                        return c_json_close_object(json);
+                        return c_json_exit_object(json);
 
                 default:
                         return C_JSON_E_INVALID_JSON;
