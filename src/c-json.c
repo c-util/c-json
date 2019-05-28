@@ -45,8 +45,176 @@ struct CJson {
         char states[];
 };
 
+static bool is_whitespace(char c) {
+        switch (c) {
+        case ' ':
+                return true;
+        case '\t':
+                return true;
+        case '\n':
+                return true;
+        case '\r':
+                return true;
+        default:
+                return false;
+        }
+}
+
+static bool is_end_of_number(char c) {
+        switch (c) {
+        case '\0':
+                return true;
+        case ',':
+                return true;
+        case ']':
+                return true;
+        case '}':
+                return true;
+        default:
+                return is_whitespace(c);
+        }
+}
+
+enum {
+        JSON_NUMBER_STATE_INIT,
+        JSON_NUMBER_STATE_SIGN,
+        JSON_NUMBER_STATE_NULL,
+        JSON_NUMBER_STATE_SIGNIFICAND,
+        JSON_NUMBER_STATE_DECIMAL_POINT,
+        JSON_NUMBER_STATE_FRACTION,
+        JSON_NUMBER_STATE_EXPONENT_MARKER,
+        JSON_NUMBER_STATE_EXPONENT_SIGN,
+        JSON_NUMBER_STATE_EXPONENT,
+};
+
+static bool is_number(const char *p) {
+        int state = JSON_NUMBER_STATE_INIT;
+
+        while (!is_end_of_number(*p)) {
+                switch (state) {
+                case JSON_NUMBER_STATE_INIT:
+                        switch (*p) {
+                        case '-':
+                                state = JSON_NUMBER_STATE_SIGN;
+                                break;
+                        case '0':
+                                state = JSON_NUMBER_STATE_NULL;
+                                break;
+                        case '1' ... '9':
+                                state = JSON_NUMBER_STATE_SIGNIFICAND;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_SIGN:
+                        switch (*p) {
+                        case '0':
+                                state = JSON_NUMBER_STATE_NULL;
+                                break;
+                        case '1' ... '9':
+                                state = JSON_NUMBER_STATE_SIGNIFICAND;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_NULL:
+                        switch (*p) {
+                        case '.':
+                                state = JSON_NUMBER_STATE_DECIMAL_POINT;
+                                break;
+                        case 'e':
+                        case 'E':
+                                state = JSON_NUMBER_STATE_EXPONENT_MARKER;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_SIGNIFICAND:
+                        switch (*p) {
+                        case '0' ... '9':
+                                break;
+                        case '.':
+                                state = JSON_NUMBER_STATE_DECIMAL_POINT;
+                                break;
+                        case 'e':
+                        case 'E':
+                                state = JSON_NUMBER_STATE_EXPONENT_MARKER;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_DECIMAL_POINT:
+                        switch (*p) {
+                        case '0' ... '9':
+                                state = JSON_NUMBER_STATE_FRACTION;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_FRACTION:
+                        switch (*p) {
+                        case '0' ... '9':
+                                break;
+                        case 'e':
+                        case 'E':
+                                state = JSON_NUMBER_STATE_EXPONENT_MARKER;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_EXPONENT_MARKER:
+                        switch (*p) {
+                        case '0' ... '9':
+                                state = JSON_NUMBER_STATE_EXPONENT;
+                                break;
+                        case '+':
+                        case '-':
+                                state = JSON_NUMBER_STATE_EXPONENT_SIGN;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_EXPONENT_SIGN:
+                        switch (*p) {
+                        case '0' ... '9':
+                                state = JSON_NUMBER_STATE_EXPONENT;
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                case JSON_NUMBER_STATE_EXPONENT:
+                        switch (*p) {
+                        case '0' ... '9':
+                                break;
+                        default:
+                                return false;
+                        }
+                        break;
+                }
+                ++p;
+        }
+
+        switch (state) {
+        case JSON_NUMBER_STATE_NULL:
+        case JSON_NUMBER_STATE_SIGNIFICAND:
+        case JSON_NUMBER_STATE_FRACTION:
+        case JSON_NUMBER_STATE_EXPONENT:
+                return true;
+        default:
+                return false;
+        }
+}
+
 static const char * skip_space(const char *p) {
-        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+        while (is_whitespace(*p))
                 p += 1;
 
         return p;
@@ -630,6 +798,9 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
 
         if (json->states[json->level] == '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
+
+        if (!is_number(json->p))
+                return (json->poison = C_JSON_E_INVALID_JSON);
 
         loc = uselocale(json->locale);
         if (loc == (locale_t)0)
