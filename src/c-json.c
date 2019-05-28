@@ -791,7 +791,7 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         char *end;
         double number;
         locale_t loc;
-        int r;
+        int r, err;
 
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -805,10 +805,15 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         loc = uselocale(json->locale);
         if (loc == (locale_t)0)
                 return (json->poison = -ENOTRECOVERABLE);
+        errno = 0;
         number = strtod(json->p, &end);
+        err = errno;
         loc = uselocale(loc);
         if (loc == (locale_t)0)
                 return (json->poison = -ENOTRECOVERABLE);
+
+        if (err != 0)
+                return (json->poison = C_JSON_E_INVALID_JSON);
 
         if (end == json->p)
                 return (json->poison = C_JSON_E_INVALID_JSON);
