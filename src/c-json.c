@@ -24,6 +24,11 @@ struct CJson {
         int poison;
 
         /*
+         * The locale to use for parsing of floating point numbers.
+         */
+        locale_t locale;
+
+        /*
          * State for each nesting level. @n_states is the maximum
          * nesting depth. For each level, the state can be:
          *
@@ -184,6 +189,10 @@ _c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
         if (!json)
                 return -ENOMEM;
 
+        json->locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t) 0);
+        if (json->locale == (locale_t)0)
+                return -ENOTRECOVERABLE;
+
         json->n_states = max_depth;
 
         *jsonp = json;
@@ -199,6 +208,12 @@ _c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
  * Return: NULL
  */
 _c_public_ CJson * c_json_free(CJson *json) {
+        if (!json)
+                return NULL;
+
+        if (json->locale != (locale_t)0)
+                freelocale(json->locale);
+
         free(json);
 
         return NULL;
@@ -616,10 +631,13 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         if (json->states[json->level] == '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        loc = newlocale(LC_NUMERIC_MASK, "C", (locale_t) 0);
-        uselocale(loc);
+        loc = uselocale(json->locale);
+        if (loc == (locale_t)0)
+                return (json->poison = -ENOTRECOVERABLE);
         number = strtod(json->p, &end);
-        freelocale(loc);
+        loc = uselocale(loc);
+        if (loc == (locale_t)0)
+                return (json->poison = -ENOTRECOVERABLE);
 
         if (end == json->p)
                 return (json->poison = C_JSON_E_INVALID_JSON);
