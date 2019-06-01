@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <c-stdaux.h>
 #include <c-utf8.h>
-#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "c-json.h"
@@ -22,11 +21,6 @@ struct CJson {
          * a no-op and returns this value.
          */
         int poison;
-
-        /*
-         * The locale to use for parsing of floating point numbers.
-         */
-        locale_t locale;
 
         /*
          * State for each nesting level. @n_states is the maximum
@@ -87,13 +81,14 @@ enum {
         JSON_NUMBER_STATE_EXPONENT,
 };
 
-static bool is_number(const char *p) {
+static bool c_json_parse_number(const char *number, size_t *n_numberp) {
+        size_t n_number = 0;
         int state = JSON_NUMBER_STATE_INIT;
 
-        while (!is_end_of_number(*p)) {
+        while (!is_end_of_number(*number)) {
                 switch (state) {
                 case JSON_NUMBER_STATE_INIT:
-                        switch (*p) {
+                        switch (*number) {
                         case '-':
                                 state = JSON_NUMBER_STATE_SIGN;
                                 break;
@@ -108,7 +103,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_SIGN:
-                        switch (*p) {
+                        switch (*number) {
                         case '0':
                                 state = JSON_NUMBER_STATE_NULL;
                                 break;
@@ -120,7 +115,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_NULL:
-                        switch (*p) {
+                        switch (*number) {
                         case '.':
                                 state = JSON_NUMBER_STATE_DECIMAL_POINT;
                                 break;
@@ -133,7 +128,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_SIGNIFICAND:
-                        switch (*p) {
+                        switch (*number) {
                         case '0' ... '9':
                                 break;
                         case '.':
@@ -148,7 +143,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_DECIMAL_POINT:
-                        switch (*p) {
+                        switch (*number) {
                         case '0' ... '9':
                                 state = JSON_NUMBER_STATE_FRACTION;
                                 break;
@@ -157,7 +152,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_FRACTION:
-                        switch (*p) {
+                        switch (*number) {
                         case '0' ... '9':
                                 break;
                         case 'e':
@@ -169,7 +164,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_EXPONENT_MARKER:
-                        switch (*p) {
+                        switch (*number) {
                         case '0' ... '9':
                                 state = JSON_NUMBER_STATE_EXPONENT;
                                 break;
@@ -182,7 +177,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_EXPONENT_SIGN:
-                        switch (*p) {
+                        switch (*number) {
                         case '0' ... '9':
                                 state = JSON_NUMBER_STATE_EXPONENT;
                                 break;
@@ -191,7 +186,7 @@ static bool is_number(const char *p) {
                         }
                         break;
                 case JSON_NUMBER_STATE_EXPONENT:
-                        switch (*p) {
+                        switch (*number) {
                         case '0' ... '9':
                                 break;
                         default:
@@ -199,7 +194,8 @@ static bool is_number(const char *p) {
                         }
                         break;
                 }
-                ++p;
+                ++number;
+                ++n_number;
         }
 
         switch (state) {
@@ -207,10 +203,14 @@ static bool is_number(const char *p) {
         case JSON_NUMBER_STATE_SIGNIFICAND:
         case JSON_NUMBER_STATE_FRACTION:
         case JSON_NUMBER_STATE_EXPONENT:
-                return true;
+                break;
         default:
                 return false;
         }
+
+        if (n_numberp)
+                *n_numberp = n_number;
+        return true;
 }
 
 static const char * skip_space(const char *p) {
@@ -357,10 +357,6 @@ _c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
         if (!json)
                 return -ENOMEM;
 
-        json->locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t) 0);
-        if (json->locale == (locale_t)0)
-                return -ENOTRECOVERABLE;
-
         json->n_states = max_depth;
 
         *jsonp = json;
@@ -378,9 +374,6 @@ _c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
 _c_public_ CJson * c_json_free(CJson *json) {
         if (!json)
                 return NULL;
-
-        if (json->locale != (locale_t)0)
-                freelocale(json->locale);
 
         free(json);
 
@@ -734,68 +727,22 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
 }
 
 /**
- * c_json_read_u64() - read a unsigned integer
- * @json                json object
- * @srtringp            return location for the integer
- *
- * Return: <0 on fatal error
- *         0 on success
- *         the last error that occured in a reader function
- *         C_JSON_E_INVALID_TYPE if then next value is not an unsigned integer
- *         C_JSON_E_INVALID_JSON if the JSON input is malformed
- */
-_c_public_ int c_json_read_u64(CJson *json, uint64_t *numberp) {
-        char *end;
-        unsigned long long number;
-        int r, err;
-
-        if (_c_unlikely_(json->poison))
-                return json->poison;
-
-        if (json->states[json->level] == '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
-
-        /* strtoull() silently flips sign if first char is a minus */
-        if (*json->p == '-')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
-
-        errno = 0;
-        number = strtoull(json->p, &end, 10);
-        err = errno;
-
-        if (end == json->p || *end == '.' || *end == 'e' || *end == 'E')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
-        else if (err || number > UINT64_MAX)
-                return (json->poison = C_JSON_E_INVALID_JSON);
-
-        json->p = end;
-
-        r = c_json_advance(json);
-        if (r)
-                return r;
-
-        if (numberp)
-                *numberp = number;
-
-        return 0;
-}
-
-/**
- * c_json_read_f64() - read a number
+ * c_json_read_number() - read a number
  * @json                json object
  * @srtringp            return location for the number
  *
+ * Returns a string representation of a JSON number.
+ *
  * Return: <0 on fatal error
  *         0 on success
  *         the last error that occured in a reader function
- *         C_JSON_E_INVALID_TYPE if then next value is not a number
+ *         C_JSON_E_INVALID_TYPE if the next value is not a number
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_read_f64(CJson *json, double *numberp) {
-        char *end;
-        double number;
-        locale_t loc;
-        int r, err;
+_c_public_ int c_json_read_number(CJson *json, const char **numberp, size_t *n_numberp) {
+        const char *number;
+        size_t n_number;
+        int r;
 
         if (_c_unlikely_(json->poison))
                 return json->poison;
@@ -803,26 +750,11 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
         if (json->states[json->level] == '{')
                 return (json->poison = C_JSON_E_INVALID_TYPE);
 
-        if (!is_number(json->p))
+        if (!c_json_parse_number(json->p, &n_number))
                 return (json->poison = C_JSON_E_INVALID_JSON);
 
-        loc = uselocale(json->locale);
-        if (loc == (locale_t)0)
-                return (json->poison = -ENOTRECOVERABLE);
-        errno = 0;
-        number = strtod(json->p, &end);
-        err = errno;
-        loc = uselocale(loc);
-        if (loc == (locale_t)0)
-                return (json->poison = -ENOTRECOVERABLE);
-
-        if (err != 0)
-                return (json->poison = C_JSON_E_INVALID_JSON);
-
-        if (end == json->p)
-                return (json->poison = C_JSON_E_INVALID_JSON);
-
-        json->p = end;
+        number = json->p;
+        json->p += n_number;
 
         r = c_json_advance(json);
         if (r)
@@ -830,6 +762,8 @@ _c_public_ int c_json_read_f64(CJson *json, double *numberp) {
 
         if (numberp)
                 *numberp = number;
+        if (n_numberp)
+                *n_numberp = n_number;
 
         return 0;
 }

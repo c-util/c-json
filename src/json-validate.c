@@ -47,7 +47,7 @@ int json_read_value(CJson *json) {
                         return c_json_read_string(json, NULL);
 
                 case C_JSON_TYPE_NUMBER:
-                        return c_json_read_f64(json, NULL);
+                        return c_json_read_number(json, NULL, NULL);
 
                 case C_JSON_TYPE_ARRAY:
                         c_json_enter_array(json);

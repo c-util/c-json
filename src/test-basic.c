@@ -8,8 +8,8 @@
 static void test_basic(void) {
         static CJson *json = NULL;
         _c_cleanup_(c_freep) char *string = NULL;
-        uint64_t u64 = 0;
-        double f64 = 0;
+        const char *number;
+        size_t n_number;
         bool b = false;
 
         assert(!c_json_new(&json, 256));
@@ -21,21 +21,25 @@ static void test_basic(void) {
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "12345678");
-        assert(!c_json_read_u64(json, &u64));
-        assert(u64 == 12345678);
+        assert(!c_json_read_number(json, &number, &n_number));
+        assert(strcmp(number, "12345678") == 0);
+        assert(n_number == strlen("12345678"));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "-1");
-        assert(c_json_read_u64(json, &u64) == C_JSON_E_INVALID_TYPE);
-        assert(c_json_end_read(json) == C_JSON_E_INVALID_TYPE);
+        assert(!c_json_read_number(json, &number, &n_number));
+        assert(strcmp(number, "-1") == 0);
+        assert(n_number == strlen("-1"));
+        assert(!c_json_end_read(json));
         json = c_json_free(json);
 
         assert(!c_json_new(&json, 256));
         c_json_begin_read(json, "-3.14");
-        assert(!c_json_read_f64(json, &f64));
-        assert(f64 > -3.15 && f64 < -3.13);
+        assert(!c_json_read_number(json, &number, &n_number));
+        assert(strcmp(number, "-3.14") == 0);
+        assert(n_number == strlen("-3.14"));
         assert(!c_json_end_read(json));
         json = c_json_free(json);
 
@@ -68,10 +72,13 @@ static void test_array(void) {
         c_json_begin_read(json, "[ 1, 2, 3, 4, 5, 6 ]");
         assert(!c_json_enter_array(json));
         for (uint64_t i = 1; i < 7; i += 1) {
-                uint64_t n;
+                const char *number;
+                unsigned long long n;
+
                 assert(c_json_more(json));
-                assert(!c_json_read_u64(json, &n));
-                        assert(n == i);
+                assert(!c_json_read_number(json, &number, NULL));
+                n = strtoull(number, NULL, 0);
+                assert(n == i);
         }
         assert(!c_json_exit_array(json));
         assert(!c_json_end_read(json));
@@ -98,12 +105,14 @@ static void test_object(void) {
         assert(!c_json_enter_object(json));
         for (uint64_t i = 0; i < 2; i += 1) {
                 _c_cleanup_(c_freep) char *key = NULL;
+                const char *number;
                 uint64_t n;
 
                 assert(c_json_more(json));
                 assert(!c_json_read_string(json, &key));
                 assert(!strcmp(expected[i].key, key));
-                assert(!c_json_read_u64(json, &n));
+                assert(!c_json_read_number(json, &number, NULL));
+                n = strtoull(number, NULL, 0);
                 assert(expected[i].value == n);
         }
         assert(!c_json_exit_object(json));
@@ -128,7 +137,7 @@ static void test_peek(void) {
         assert(c_json_peek(json) == C_JSON_TYPE_STRING);
         assert(!c_json_read_string(json, NULL));
         assert(c_json_peek(json) == C_JSON_TYPE_NUMBER);
-        assert(!c_json_read_u64(json, NULL));
+        assert(!c_json_read_number(json, NULL, NULL));
 
         assert(c_json_peek(json) == C_JSON_TYPE_STRING);
         assert(!c_json_read_string(json, NULL));
