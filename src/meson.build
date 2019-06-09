@@ -12,7 +12,7 @@ libcjson_deps = [
 libcjson_private = static_library(
         'cjson-private',
         [
-                'c-json.c',
+                'c-json-reader.c',
         ],
         c_args: [
                 '-fvisibility=hidden',

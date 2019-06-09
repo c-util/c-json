@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "c-json.h"
 
-struct CJson {
+struct CJsonReader {
         const char *input;
 
         /*
@@ -81,7 +81,7 @@ enum {
         JSON_NUMBER_STATE_EXPONENT,
 };
 
-static bool c_json_parse_number(const char *number, size_t *n_numberp) {
+static bool c_json_reader_parse_number(const char *number, size_t *n_numberp) {
         size_t n_number = 0;
         int state = JSON_NUMBER_STATE_INIT;
 
@@ -221,50 +221,50 @@ static const char * skip_space(const char *p) {
 }
 
 /*
- * Advances json->p to the start of the next value. Must be called
+ * Advances reader->p to the start of the next value. Must be called
  * excactly once after a value has been read.
  */
-static int c_json_advance(CJson *json) {
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+static int c_json_reader_advance(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        json->p = skip_space(json->p);
+        reader->p = skip_space(reader->p);
 
-        switch (json->states[json->level]) {
+        switch (reader->states[reader->level]) {
                 case '[':
-                        if (*json->p == ',') {
-                                json->states[json->level] = ',';
-                                json->p = skip_space(json->p + 1);
-                        } else if (*json->p != ']')
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        if (*reader->p == ',') {
+                                reader->states[reader->level] = ',';
+                                reader->p = skip_space(reader->p + 1);
+                        } else if (*reader->p != ']')
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
                         break;
 
                 case ',':
-                        if (*json->p == ',')
-                                json->p = skip_space(json->p + 1);
-                        else if (*json->p == ']')
-                                json->states[json->level] = '[';
+                        if (*reader->p == ',')
+                                reader->p = skip_space(reader->p + 1);
+                        else if (*reader->p == ']')
+                                reader->states[reader->level] = '[';
                         else
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
                         break;
 
                 case '{':
-                        if (*json->p == ':') {
-                                json->states[json->level] = ':';
-                                json->p = skip_space(json->p + 1);
+                        if (*reader->p == ':') {
+                                reader->states[reader->level] = ':';
+                                reader->p = skip_space(reader->p + 1);
                         }
                         else
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
                         break;
 
                 case ':':
-                        if (*json->p == ',') {
-                                json->states[json->level] = '{';
-                                json->p = skip_space(json->p + 1);
-                                if (*json->p != '"')
-                                        return (json->poison = C_JSON_E_INVALID_JSON);
-                        } else if (*json->p != '}')
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        if (*reader->p == ',') {
+                                reader->states[reader->level] = '{';
+                                reader->p = skip_space(reader->p + 1);
+                                if (*reader->p != '"')
+                                        return (reader->poison = C_JSON_E_INVALID_JSON);
+                        } else if (*reader->p != '}')
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
                         break;
         }
 
@@ -278,7 +278,7 @@ static int c_json_advance(CJson *json) {
  * Return: 0 on success
  *         C_JSON_E_INVALID_JSON if @p does not point to a valid sequence
  */
-static int c_json_read_utf16_unit(const char *p, uint16_t *unitp) {
+static int c_json_reader_read_utf16_unit(const char *p, uint16_t *unitp) {
         uint8_t digits[4];
 
         for (size_t i = 0; i < 4; i += 1) {
@@ -305,7 +305,7 @@ static int c_json_read_utf16_unit(const char *p, uint16_t *unitp) {
         return 0;
 }
 
-static int c_json_write_utf8(uint32_t cp, FILE *stream) {
+static int c_json_reader_write_utf8(uint32_t cp, FILE *stream) {
         switch (cp) {
         case  0x0000 ...   0x007F:
                 if (fputc((char)cp, stream) < 0)
@@ -343,45 +343,45 @@ static int c_json_write_utf8(uint32_t cp, FILE *stream) {
 }
 
 /**
- * c_json_new() - allocate and initialize a CJSon struct
+ * c_json_reader_new() - allocate and initialize a CJSon struct
  * @jsonp:              return location
  * @max_depth:          maximum nesting depth
  *
  * Return: <0 on fatal failures
  *         0 on success
  */
-_c_public_ int c_json_new(CJson **jsonp, size_t max_depth) {
-        _c_cleanup_(c_json_freep) CJson *json = NULL;
+_c_public_ int c_json_reader_new(CJsonReader **readerp, size_t max_depth) {
+        _c_cleanup_(c_json_reader_freep) CJsonReader *reader = NULL;
 
-        json = calloc(1, sizeof(*json) + max_depth + 1);
-        if (!json)
+        reader = calloc(1, sizeof(*reader) + max_depth + 1);
+        if (!reader)
                 return -ENOMEM;
 
-        json->n_states = max_depth;
+        reader->n_states = max_depth;
 
-        *jsonp = json;
-        json = NULL;
+        *readerp = reader;
+        reader = NULL;
 
         return 0;
 }
 
 /**
- * c_json_free() - deinitialize and free a CJSon struct
+ * c_json_reader_free() - deinitialize and free a CJSon struct
  * @json:               json to free
  *
  * Return: NULL
  */
-_c_public_ CJson * c_json_free(CJson *json) {
-        if (!json)
+_c_public_ CJsonReader * c_json_reader_free(CJsonReader *reader) {
+        if (!reader)
                 return NULL;
 
-        free(json);
+        free(reader);
 
         return NULL;
 }
 
 /**
- * c_json_peek - peek at the next value
+ * c_json_reader_peek - peek at the next value
  * @json                json object
  *
  * Peeks at the next value in the input stream. Does not validate that
@@ -390,11 +390,11 @@ _c_public_ CJson * c_json_free(CJson *json) {
  * Return: -1 if the next token is invalid or when exiting a container
  *         one of the C_JSON_TYPE_ values
  */
-_c_public_ int c_json_peek(CJson *json) {
-        if (_c_unlikely_(json->poison))
+_c_public_ int c_json_reader_peek(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
                 return -1;
 
-        switch (*json->p) {
+        switch (*reader->p) {
                 case '[':
                         return C_JSON_TYPE_ARRAY;
 
@@ -423,22 +423,22 @@ _c_public_ int c_json_peek(CJson *json) {
 }
 
 /**
- * c_json_begin_read() - begin readinh JSON from a string
+ * c_json_reader_begin_read() - begin readinh JSON from a string
  * @json                json object
  * @string              0-terminated string to read from
  *
  * It is an error to call this function multiple times without calling
- * c_json_end_read().
+ * c_json_reader_end_read().
  */
-_c_public_ void c_json_begin_read(CJson *json, const char *string) {
-        assert(!json->input);
+_c_public_ void c_json_reader_begin_read(CJsonReader *reader, const char *string) {
+        assert(!reader->input);
 
-        json->input = string;
-        json->p = skip_space(json->input);
+        reader->input = string;
+        reader->p = skip_space(reader->input);
 }
 
 /**
- * c_json_end_read() - end reading
+ * c_json_reader_end_read() - end reading
  * @json                json object
  *
  * Ends reading. If there was a previous error, it is returned. The
@@ -450,27 +450,27 @@ _c_public_ void c_json_begin_read(CJson *json, const char *string) {
  *         C_JSON_E_INVALID_TYPE if called before the input was fully read
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_end_read(CJson *json) {
-        int r = json->poison;
+_c_public_ int c_json_reader_end_read(CJsonReader *reader) {
+        int r = reader->poison;
 
         if (!r) {
-                if (json->level > 0)
+                if (reader->level > 0)
                         r = C_JSON_E_INVALID_TYPE;
 
-                if (json->level == 0 && *json->p != '\0')
+                if (reader->level == 0 && *reader->p != '\0')
                         r = C_JSON_E_INVALID_JSON;
         }
 
-        json->level = 0;
-        json->input = NULL;
-        json->p = NULL;
-        json->poison = 0;
+        reader->level = 0;
+        reader->input = NULL;
+        reader->p = NULL;
+        reader->poison = 0;
 
         return r;
 }
 
 /**
- * c_json_read_null() - read `null` value
+ * c_json_reader_read_null() - read `null` value
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -479,29 +479,29 @@ _c_public_ int c_json_end_read(CJson *json) {
  *         C_JSON_E_INVALID_TYPE if then next value is not `null`
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_read_null(CJson *json) {
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+_c_public_ int c_json_reader_read_null(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (json->states[json->level] == '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] == '{')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        switch (*json->p) {
+        switch (*reader->p) {
                 case 'n':
-                        if (strncmp(json->p, "null", strlen("null")))
-                                return (json->poison = C_JSON_E_INVALID_JSON);
-                        json->p += strlen("null");
+                        if (strncmp(reader->p, "null", strlen("null")))
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
+                        reader->p += strlen("null");
                         break;
 
                 default:
-                        return (json->poison = C_JSON_E_INVALID_TYPE);
+                        return (reader->poison = C_JSON_E_INVALID_TYPE);
         }
 
-        return c_json_advance(json);
+        return c_json_reader_advance(reader);
 }
 
 /**
- * c_json_read_string() - read a string
+ * c_json_reader_read_string() - read a string
  * @json                json object
  * @srtringp            return location for the string
  *
@@ -513,208 +513,208 @@ _c_public_ int c_json_read_null(CJson *json) {
  *         C_JSON_E_INVALID_TYPE if then next value is not a string
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_read_string(CJson *json, char **stringp) {
+_c_public_ int c_json_reader_read_string(CJsonReader *reader, char **stringp) {
         _c_cleanup_(c_fclosep) FILE *stream = NULL;
         _c_cleanup_(c_freep) char *string = NULL;
         size_t size;
         int r;
 
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (*json->p != '"')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (*reader->p != '"')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
         stream = open_memstream(&string, &size);
         if (!stream)
-                return (json->poison = -ENOTRECOVERABLE);
+                return (reader->poison = -ENOTRECOVERABLE);
 
-        json->p += 1;
-        while (*json->p != '"') {
-                switch ((uint8_t)*json->p) {
+        reader->p += 1;
+        while (*reader->p != '"') {
+                switch ((uint8_t)*reader->p) {
                 case 0x00 ... 0x1F:
-                        return (json->poison = C_JSON_E_INVALID_JSON);
+                        return (reader->poison = C_JSON_E_INVALID_JSON);
                 case '\\':
-                        json->p += 1;
-                        switch (*json->p) {
+                        reader->p += 1;
+                        switch (*reader->p) {
                                 case '"':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('"', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case '\\':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('\\', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case '/':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('/', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'b':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('\b', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'f':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('\f', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'n':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('\n', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'r':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('\r', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 't':
-                                        json->p += 1;
+                                        reader->p += 1;
                                         if (fputc('\t', stream) < 0)
-                                                return (json->poison = -ENOTRECOVERABLE);
+                                                return (reader->poison = -ENOTRECOVERABLE);
                                         break;
 
                                 case 'u': {
                                         uint16_t cu;
                                         uint32_t cp;
 
-                                        json->p += 1;
+                                        reader->p += 1;
 
-                                        r = c_json_read_utf16_unit(json->p, &cu);
+                                        r = c_json_reader_read_utf16_unit(reader->p, &cu);
                                         if (r)
-                                                return (json->poison = r);
-                                        json->p += 4;
+                                                return (reader->poison = r);
+                                        reader->p += 4;
 
                                         switch (cu) {
                                         case 0xD800 ... 0xDBFF:
                                                 cp = 0x10000 + ((cu - 0xD800) << 10);
 
-                                                if (json->p[0] != '\\' || json->p[1] != 'u')
-                                                        return (json->poison = C_JSON_E_INVALID_JSON);
-                                                json->p +=2;
+                                                if (reader->p[0] != '\\' || reader->p[1] != 'u')
+                                                        return (reader->poison = C_JSON_E_INVALID_JSON);
+                                                reader->p +=2;
 
-                                                r = c_json_read_utf16_unit(json->p, &cu);
+                                                r = c_json_reader_read_utf16_unit(reader->p, &cu);
                                                 if (r)
-                                                        return (json->poison = r);
-                                                json->p += 4;
+                                                        return (reader->poison = r);
+                                                reader->p += 4;
 
                                                 if (cu < 0xDC00 || cu > 0xDFFF)
-                                                        return (json->poison = C_JSON_E_INVALID_JSON);
+                                                        return (reader->poison = C_JSON_E_INVALID_JSON);
 
                                                 cp += cu - 0xDC00;
 
                                                 break;
                                         case 0xDC00 ... 0xDFFF:
-                                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                                return (reader->poison = C_JSON_E_INVALID_JSON);
                                         default:
                                                 cp = cu;
                                                 break;
                                         }
 
-                                        r = c_json_write_utf8(cp, stream);
+                                        r = c_json_reader_write_utf8(cp, stream);
                                         if (r)
-                                                return (json->poison = r);
+                                                return (reader->poison = r);
 
                                         break;
                                 }
 
                                 default:
-                                        return (json->poison = C_JSON_E_INVALID_JSON);
+                                        return (reader->poison = C_JSON_E_INVALID_JSON);
                         }
                         break;
                 case 0x20 ... '\\' - 1:
                 case '\\' + 1 ... 0x7F:
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
                         break;
                 case 0xC2 ... 0xDF:
                 {
-                        const char *str = json->p;
+                        const char *str = reader->p;
                         size_t n_str = 2;
 
                         c_utf8_verify(&str, &n_str);
 
                         if (n_str != 0)
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
 
                         break;
                 }
                 case 0xE0 ... 0xEF:
                 {
-                        const char *str = json->p;
+                        const char *str = reader->p;
                         size_t n_str = 3;
 
                         c_utf8_verify(&str, &n_str);
 
                         if (n_str != 0)
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
 
                         break;
                 }
                 case 0xF0 ... 0xF4:
                 {
-                        const char *str = json->p;
+                        const char *str = reader->p;
                         size_t n_str = 4;
 
                         c_utf8_verify(&str, &n_str);
 
                         if (n_str != 0)
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
-                        if (fputc(*json->p, stream) < 0)
-                                return (json->poison = -ENOTRECOVERABLE);
-                        json->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
+                        if (fputc(*reader->p, stream) < 0)
+                                return (reader->poison = -ENOTRECOVERABLE);
+                        reader->p += 1;
 
                         break;
                 }
                 default:
-                        return (json->poison = C_JSON_E_INVALID_JSON);
+                        return (reader->poison = C_JSON_E_INVALID_JSON);
                 }
         }
 
-        json->p += 1; /* '"' */
+        reader->p += 1; /* '"' */
 
         stream = c_fclose(stream);
 
-        r = c_json_advance(json);
+        r = c_json_reader_advance(reader);
         if (r)
                 return r;
 
@@ -727,7 +727,7 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
 }
 
 /**
- * c_json_read_number() - read a number
+ * c_json_reader_read_number() - read a number
  * @json                json object
  * @srtringp            return location for the number
  *
@@ -739,24 +739,24 @@ _c_public_ int c_json_read_string(CJson *json, char **stringp) {
  *         C_JSON_E_INVALID_TYPE if the next value is not a number
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_read_number(CJson *json, const char **numberp, size_t *n_numberp) {
+_c_public_ int c_json_reader_read_number(CJsonReader *reader, const char **numberp, size_t *n_numberp) {
         const char *number;
         size_t n_number;
         int r;
 
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (json->states[json->level] == '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] == '{')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (!c_json_parse_number(json->p, &n_number))
-                return (json->poison = C_JSON_E_INVALID_JSON);
+        if (!c_json_reader_parse_number(reader->p, &n_number))
+                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-        number = json->p;
-        json->p += n_number;
+        number = reader->p;
+        reader->p += n_number;
 
-        r = c_json_advance(json);
+        r = c_json_reader_advance(reader);
         if (r)
                 return r;
 
@@ -769,7 +769,7 @@ _c_public_ int c_json_read_number(CJson *json, const char **numberp, size_t *n_n
 }
 
 /**
- * c_json_read_bool() - read a boolean
+ * c_json_reader_read_bool() - read a boolean
  * @json                json object
  * @srtringp            return location for the boolean
  *
@@ -779,36 +779,36 @@ _c_public_ int c_json_read_number(CJson *json, const char **numberp, size_t *n_n
  *         C_JSON_E_INVALID_TYPE if then next value is not a boolean
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
+_c_public_ int c_json_reader_read_bool(CJsonReader *reader, bool *boolp) {
         bool b;
         int r;
 
-        if (json->states[json->level] == '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] == '{')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        switch (*json->p) {
+        switch (*reader->p) {
                 case 't':
-                        if (strncmp(json->p, "true", strlen("true")))
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        if (strncmp(reader->p, "true", strlen("true")))
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
                         b = true;
-                        json->p += strlen("true");
+                        reader->p += strlen("true");
                         break;
 
                 case 'f':
-                        if (strncmp(json->p, "false", strlen("false")))
-                                return (json->poison = C_JSON_E_INVALID_JSON);
+                        if (strncmp(reader->p, "false", strlen("false")))
+                                return (reader->poison = C_JSON_E_INVALID_JSON);
                         b = false;
-                        json->p += strlen("false");
+                        reader->p += strlen("false");
                         break;
 
                 default:
-                        return (json->poison = C_JSON_E_INVALID_TYPE);
+                        return (reader->poison = C_JSON_E_INVALID_TYPE);
         }
 
-        r = c_json_advance(json);
+        r = c_json_reader_advance(reader);
         if (r)
                 return r;
 
@@ -819,33 +819,33 @@ _c_public_ int c_json_read_bool(CJson *json, bool *boolp) {
 }
 
 /**
- * c_json_more() - is another value available
+ * c_json_reader_more() - is another value available
  * @json                json object
  *
  * Return: true if another value is available in the current container
  *         false if no value is available or an error occured in a call to a previous function
  */
-_c_public_ bool c_json_more(CJson *json) {
-        if (_c_unlikely_(json->poison))
+_c_public_ bool c_json_reader_more(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
                 return false;
 
-        if (!*json->p)
+        if (!*reader->p)
                 return false;
 
-        switch (json->states[json->level]) {
+        switch (reader->states[reader->level]) {
                 case '[':
-                        return *json->p != ']';
+                        return *reader->p != ']';
 
                 case '{':
                 case ':':
-                        return *json->p != '}';
+                        return *reader->p != '}';
         }
 
         return true;
 }
 
 /**
- * c_json_enter_array() - enter into an array
+ * c_json_reader_enter_array() - enter into an array
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -855,27 +855,27 @@ _c_public_ bool c_json_more(CJson *json) {
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  *         C_JSON_E_DEPTH_OVERFLOW if the nesting depth is too high
  */
-_c_public_ int c_json_enter_array(CJson *json) {
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+_c_public_ int c_json_reader_enter_array(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (json->states[json->level] == '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] == '{')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (*json->p != '[')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (*reader->p != '[')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (json->level >= json->n_states)
-                return (json->poison = C_JSON_E_DEPTH_OVERFLOW);
+        if (reader->level >= reader->n_states)
+                return (reader->poison = C_JSON_E_DEPTH_OVERFLOW);
 
-        json->p = skip_space(json->p + 1);
-        json->states[++json->level] = '[';
+        reader->p = skip_space(reader->p + 1);
+        reader->states[++reader->level] = '[';
 
         return 0;
 }
 
 /**
- * c_json_exit_array() - exit from an array
+ * c_json_reader_exit_array() - exit from an array
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -884,24 +884,24 @@ _c_public_ int c_json_enter_array(CJson *json) {
  *         C_JSON_E_INVALID_TYPE if not currently in an array
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_exit_array(CJson *json) {
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+_c_public_ int c_json_reader_exit_array(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (json->states[json->level] != '[' && json->states[json->level] != ',')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] != '[' && reader->states[reader->level] != ',')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (*json->p != ']')
-                return (json->poison = C_JSON_E_INVALID_JSON);
+        if (*reader->p != ']')
+                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-        json->p += 1;
-        json->level -= 1;
+        reader->p += 1;
+        reader->level -= 1;
 
-        return c_json_advance(json);
+        return c_json_reader_advance(reader);
 }
 
 /**
- * c_json_enter_object() - enter into an object
+ * c_json_reader_enter_object() - enter into an object
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -911,30 +911,30 @@ _c_public_ int c_json_exit_array(CJson *json) {
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  *         C_JSON_E_DEPTH_OVERFLOW if the nesting depth is too high
  */
-_c_public_ int c_json_enter_object(CJson *json) {
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+_c_public_ int c_json_reader_enter_object(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (json->states[json->level] == '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] == '{')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (*json->p != '{')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (*reader->p != '{')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (json->level >= json->n_states)
-                return (json->poison = C_JSON_E_DEPTH_OVERFLOW);
+        if (reader->level >= reader->n_states)
+                return (reader->poison = C_JSON_E_DEPTH_OVERFLOW);
 
-        json->p = skip_space(json->p + 1);
-        if (*json->p != '"' && *json->p != '}')
-                return (json->poison = C_JSON_E_INVALID_JSON);
+        reader->p = skip_space(reader->p + 1);
+        if (*reader->p != '"' && *reader->p != '}')
+                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-        json->states[++json->level] = '{';
+        reader->states[++reader->level] = '{';
 
         return 0;
 }
 
 /**
- * c_json_exit_object() - exit from an object
+ * c_json_reader_exit_object() - exit from an object
  * @json                json object
  *
  * Return: <0 on fatal error
@@ -943,18 +943,18 @@ _c_public_ int c_json_enter_object(CJson *json) {
  *         C_JSON_E_INVALID_TYPE if not currently in an object
  *         C_JSON_E_INVALID_JSON if the JSON input is malformed
  */
-_c_public_ int c_json_exit_object(CJson *json) {
-        if (_c_unlikely_(json->poison))
-                return json->poison;
+_c_public_ int c_json_reader_exit_object(CJsonReader *reader) {
+        if (_c_unlikely_(reader->poison))
+                return reader->poison;
 
-        if (json->states[json->level] != '{' && json->states[json->level] != ':')
-                return (json->poison = C_JSON_E_INVALID_TYPE);
+        if (reader->states[reader->level] != '{' && reader->states[reader->level] != ':')
+                return (reader->poison = C_JSON_E_INVALID_TYPE);
 
-        if (*json->p != '}')
-                return (json->poison = C_JSON_E_INVALID_JSON);
+        if (*reader->p != '}')
+                return (reader->poison = C_JSON_E_INVALID_JSON);
 
-        json->p += 1;
-        json->level -= 1;
+        reader->p += 1;
+        reader->level -= 1;
 
-        return c_json_advance(json);
+        return c_json_reader_advance(reader);
 }

@@ -7,7 +7,8 @@ extern "C" {
 #include <stdarg.h>
 #include <stdbool.h>
 
-typedef struct CJson CJson;
+typedef struct CJsonReader CJsonReader;
+typedef struct CJsonWriter CJsonWriter;
 typedef struct CJsonLevel CJsonLevel;
 
 enum  {
@@ -26,25 +27,26 @@ enum {
         C_JSON_TYPE_OBJECT,
 };
 
-int c_json_new(CJson **jsonp, size_t max_depth);
-CJson * c_json_free(CJson *json);
+/* readers */
+int c_json_reader_new(CJsonReader **readerp, size_t max_depth);
+CJsonReader * c_json_reader_free(CJsonReader *reader);
 
-void c_json_begin_read(CJson *json, const char *string);
-int c_json_end_read(CJson *json);
-int c_json_peek(CJson *json);
-int c_json_read_null(CJson *json);
-int c_json_read_string(CJson *json, char **stringp);
-int c_json_read_number(CJson *json, const char **numberp, size_t *n_numberp);
-int c_json_read_bool(CJson *json, bool *boolp);
-bool c_json_more(CJson *json);
-int c_json_enter_array(CJson *json);
-int c_json_exit_array(CJson *json);
-int c_json_enter_object(CJson *json);
-int c_json_exit_object(CJson *json);
+void c_json_reader_begin_read(CJsonReader *reader, const char *string);
+int c_json_reader_end_read(CJsonReader *reader);
+int c_json_reader_peek(CJsonReader *reader);
+int c_json_reader_read_null(CJsonReader *reader);
+int c_json_reader_read_string(CJsonReader *reader, char **stringp);
+int c_json_reader_read_number(CJsonReader *reader, const char **numberp, size_t *n_numberp);
+int c_json_reader_read_bool(CJsonReader *reader, bool *boolp);
+bool c_json_reader_more(CJsonReader *reader);
+int c_json_reader_enter_array(CJsonReader *reader);
+int c_json_reader_exit_array(CJsonReader *reader);
+int c_json_reader_enter_object(CJsonReader *reader);
+int c_json_reader_exit_object(CJsonReader *reader);
 
-static inline void c_json_freep(CJson **jsonp) {
-        if (*jsonp)
-                c_json_free(*jsonp);
+static inline void c_json_reader_freep(CJsonReader **readerp) {
+        if (*readerp)
+                c_json_reader_free(*readerp);
 }
 
 #ifdef __cplusplus
