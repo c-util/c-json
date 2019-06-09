@@ -35,37 +35,37 @@ int read_file(FILE *file, char **contentsp) {
         return 0;
 }
 
-int json_read_value(CJson *json) {
-        switch (c_json_peek(json)) {
+int json_read_value(CJsonReader *reader) {
+        switch (c_json_reader_peek(reader)) {
                 case C_JSON_TYPE_NULL:
-                        return c_json_read_null(json);
+                        return c_json_reader_read_null(reader);
 
                 case C_JSON_TYPE_BOOLEAN:
-                        return c_json_read_bool(json, NULL);
+                        return c_json_reader_read_bool(reader, NULL);
 
                 case C_JSON_TYPE_STRING:
-                        return c_json_read_string(json, NULL);
+                        return c_json_reader_read_string(reader, NULL);
 
                 case C_JSON_TYPE_NUMBER:
-                        return c_json_read_number(json, NULL, NULL);
+                        return c_json_reader_read_number(reader, NULL, NULL);
 
                 case C_JSON_TYPE_ARRAY:
-                        c_json_enter_array(json);
-                        while (c_json_more(json)) {
-                                int r = json_read_value(json);
+                        c_json_reader_enter_array(reader);
+                        while (c_json_reader_more(reader)) {
+                                int r = json_read_value(reader);
                                 if (r)
                                         return r;
                         }
-                        return c_json_exit_array(json);
+                        return c_json_reader_exit_array(reader);
 
                 case C_JSON_TYPE_OBJECT:
-                        c_json_enter_object(json);
-                        while (c_json_more(json)) {
-                                int r = json_read_value(json);
+                        c_json_reader_enter_object(reader);
+                        while (c_json_reader_more(reader)) {
+                                int r = json_read_value(reader);
                                 if (r)
                                         return r;
                         }
-                        return c_json_exit_object(json);
+                        return c_json_reader_exit_object(reader);
 
                 default:
                         return C_JSON_E_INVALID_JSON;
@@ -74,7 +74,7 @@ int json_read_value(CJson *json) {
 
 int main(int argc, char **argv) {
         _c_cleanup_ (c_fclosep) FILE *file = NULL;
-        _c_cleanup_ (c_json_freep) CJson *json = NULL;
+        _c_cleanup_ (c_json_reader_freep) CJsonReader *reader = NULL;
         _c_cleanup_ (c_freep) char *input = NULL;
         int r;
 
@@ -92,11 +92,11 @@ int main(int argc, char **argv) {
                         return 1;
         }
 
-        c_json_new(&json, 256);
-        c_json_begin_read(json, input);
-        r = json_read_value(json);
+        c_json_reader_new(&reader, 256);
+        c_json_reader_begin_read(reader, input);
+        r = json_read_value(reader);
         if (r)
                 return r;
 
-        return c_json_end_read(json);
+        return c_json_reader_end_read(reader);
 }
