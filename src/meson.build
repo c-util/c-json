@@ -21,7 +21,6 @@ libcjson_both = both_libraries(
         dependencies: libcjson_deps,
         install: not meson.is_subproject(),
         link_args: [
-                '-Wl,--no-undefined',
                 '-Wl,--version-script=@0@'.format(libcjson_symfile),
         ],
         link_depends: libcjson_symfile,
