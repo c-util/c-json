@@ -1,11 +1,9 @@
 # c-json - Streaming-capable JSON Implementation
 
-## CHANGES WITH 1:
+## CHANGES WITH 1.0.0:
 
         * Initial release of c-json.
 
-        * TBD
+        Contributions from: David Rheinsberg, Lars Karlitski, Tom Gundersen
 
-        Contributions from: TBD
-
-        - TBD, YYYY-MM-DD
+        - Brno, 2022-06-22
