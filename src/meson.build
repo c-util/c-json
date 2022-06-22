@@ -20,9 +20,9 @@ libcjson_both = both_libraries(
         ],
         dependencies: libcjson_deps,
         install: not meson.is_subproject(),
-        link_args: [
+        link_args: dep_cstdaux.get_variable('version-scripts') == 'yes' ? [
                 '-Wl,--version-script=@0@'.format(libcjson_symfile),
-        ],
+        ] : [],
         link_depends: libcjson_symfile,
         soversion: 0,
 )
